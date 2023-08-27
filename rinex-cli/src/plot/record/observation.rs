@@ -4,18 +4,6 @@ use rinex::quality::QcContext;
 use rinex::{observation::*, prelude::*};
 use std::collections::HashMap;
 
-fn observable_to_physics(observable: &Observable) -> String {
-    if observable.is_phase_observable() {
-        "Phase".to_string()
-    } else if observable.is_doppler_observable() {
-        "Doppler".to_string()
-    } else if observable.is_ssi_observable() {
-        "Signal Strength".to_string()
-    } else {
-        "Pseudo Range".to_string()
-    }
-}
-
 /*
  * Plots given Observation RINEX content
  */
@@ -50,28 +38,44 @@ pub fn plot_observation(ctx: &QcContext, plot_context: &mut PlotContext) {
      * We'll design one marker per signal,
      * we need to determine total of signals per physics
      */
-    let mut total_markers: HashMap<Observable, usize> = HashMap::new();
-    for observable in primary_data.observable() {
-        if let Some(count) = total_markers.get_mut(&observable) {
-            *count += 1;
-        } else {
-            total_markers.insert(observable.clone(), 1);
-        }
-    }
+    let mut phase_plot = false;
+    let mut doppler_plot = false;
+    let mut ssi_plot = false;
+    let mut pr_plot = false;
     /*
      * One plot per physics
      */
     for observable in primary_data.observable() {
-        let (y_label, iter) = match observable {
-            Observable::Phase(_) => ("Carrier cycles", primary_data.phase()),
-            Observable::Doppler(_) => ("Doppler Shifts", primary_data.doppler()),
-            Observable::SSI(_) => ("Power [dB]", primary_data.ssi()),
-            Observable::PseudoRange(_) => ("Pseudo Range", primary_data.pseudo_range()),
+        match observable {
+            Observable::Phase(_) => {
+                if !phase_plot {
+                    plot_context.add_cartesian2d_plot("Phase cycles", "Carrier whole cycles");
+                    phase_plot = true;
+                }
+            },
+            Observable::Doppler(_) => {
+                if !doppler_plot {
+                    plot_context.add_cartesian2d_plot("Doppler shifts", "Doppler");
+                    doppler_plot = true;
+                }
+            },
+            Observable::SSI(_) => {
+                if !doppler_plot {
+                    plot_context.add_cartesian2d_plot("Signal Strength", "SSI [dB]");
+                    ssi_plot = true;
+                }
+            },
+            Observable::PseudoRange(_) => {
+                if !doppler_plot {
+                    plot_context.add_cartesian2d_plot("Pseudo Range", "Pseudo Range");
+                    pr_plot = true;
+                }
+            },
             _ => unreachable!(),
-        };
+        }
         // Design plot markers : one per signal
-        let total = total_markers.get(&observable).unwrap_or(&(1 as usize));
-        let markers = generate_markers(*total);
+        //let total = total_markers.get(&observable).unwrap_or(&(1 as usize));
+        let markers = generate_markers(20);
         /*
          * SSI observation special case
          *  in case NAV augmentation was provided
@@ -80,32 +84,146 @@ pub fn plot_observation(ctx: &QcContext, plot_context: &mut PlotContext) {
          *  we use a dual Y axis plot.
          */
         if observable.is_ssi_observable() && has_nav {
-            plot_context.add_cartesian2d_2y_plot(&observable.to_string(), y_label, "Elevation [°]");
-        } else {
-            plot_context.add_cartesian2d_plot(&observable.to_string(), y_label);
             /*
-             * Design one color per Sv PRN#
+             * Design one color per Sv
              */
             for (sv_index, sv) in primary_data.sv().enumerate() {
-                let data_x: Vec<Epoch> = primary_data
-                    .observation()
-                    .flat_map(|((e, _), (_, vehicles))| {
-                        vehicles.iter().filter_map(|(svnn, observables)| {
-                            if *svnn == sv {
-                                Some(observables)
-                            } else {
-                                None
-                            }
-                        })
-                    })
-                    .filter_map(|(obs, obsdata)| {
-                        if obs == observable {
-                            Some(obsdata)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
+                let (data_x, data_y): (Vec<Epoch>, Vec<f64>) = match observable {
+                    Observable::SSI(_) => (
+                        primary_data
+                            .ssi()
+                            .filter_map(|((e, _), svnn, obs, _value)| {
+                                if svnn == sv && obs == observable {
+                                    Some(e)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect(),
+                        primary_data
+                            .ssi()
+                            .filter_map(|((_e, _), svnn, obs, value)| {
+                                if svnn == sv && obs == observable {
+                                    Some(value)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect(),
+                    ),
+                    _ => unreachable!(),
+                };
+            }
+        } else {
+            /*
+             * Design one color per Sv
+             */
+            for (sv_index, sv) in primary_data.sv().enumerate() {
+                let (data_x, data_y): (Vec<Epoch>, Vec<f64>) = match observable {
+                    Observable::Phase(_) => (
+                        primary_data
+                            .carrier_phase()
+                            .filter_map(|((e, _), svnn, obs, _value)| {
+                                if svnn == sv && obs == observable {
+                                    Some(e)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect(),
+                        primary_data
+                            .carrier_phase()
+                            .filter_map(|((_e, _), svnn, obs, value)| {
+                                if svnn == sv && obs == observable {
+                                    Some(value)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect(),
+                    ),
+                    Observable::PseudoRange(_) => (
+                        primary_data
+                            .pseudo_range()
+                            .filter_map(|((e, _), svnn, obs, _value)| {
+                                if svnn == sv && obs == observable {
+                                    Some(e)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect(),
+                        primary_data
+                            .pseudo_range()
+                            .filter_map(|((_e, _), svnn, obs, value)| {
+                                if svnn == sv && obs == observable {
+                                    Some(value)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect(),
+                    ),
+                    Observable::SSI(_) => (
+                        primary_data
+                            .ssi()
+                            .filter_map(|((e, _), svnn, obs, _value)| {
+                                if svnn == sv && obs == observable {
+                                    Some(e)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect(),
+                        primary_data
+                            .ssi()
+                            .filter_map(|((_e, _), svnn, obs, value)| {
+                                if svnn == sv && obs == observable {
+                                    Some(value)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect(),
+                    ),
+                    Observable::Doppler(_) => (
+                        primary_data
+                            .doppler()
+                            .filter_map(|((e, _), svnn, obs, _value)| {
+                                if svnn == sv && obs == observable {
+                                    Some(e)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect(),
+                        primary_data
+                            .doppler()
+                            .filter_map(|((_e, _), svnn, obs, value)| {
+                                if svnn == sv && obs == observable {
+                                    Some(value)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect(),
+                    ),
+                    _ => unreachable!(),
+                };
+                let trace = build_chart_epoch_axis(
+                    &format!("{}({})", sv, observable),
+                    Mode::Markers,
+                    data_x,
+                    data_y,
+                )
+                .marker(Marker::new().symbol(markers[sv_index & 10].clone()))
+                .visible({
+                    if sv_index > 4 {
+                        Visible::LegendOnly
+                    } else {
+                        Visible::True
+                    }
+                });
             }
         }
     }
