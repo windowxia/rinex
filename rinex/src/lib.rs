@@ -1874,19 +1874,18 @@ impl Rinex {
         }))
     }
     /// Returns an iterator over receiver clock offsets, expressed in seconds.
-    /// Such information is kind of rare (modern receivers?),
-    /// we don't have a compelling example yet.   
-    /// Also, this library aims at estimating the clock offset in future releases.
+    /// Such information is kind of rare (modern / dual frequency receivers), and we don't have a compelling example yet.   
     /// ```
     /// use rinex::prelude::Rinex;
     /// let rnx = Rinex::from_file("../test_resources/OBS/V3/DUTH0630.22O")
     ///     .unwrap();
-    /// for ((epoch, flag), clk) in rnx.recvr_clock() {
+    /// for ((epoch, flag), clk) in rnx.receiver_clock() {
     ///     // epoch: [hifitime::Epoch]
+    ///     // flag: [EpochFlag]
     ///     // clk: receiver clock offset [s]
     /// }
     /// ```
-    pub fn recvr_clock(&self) -> Box<dyn Iterator<Item = ((Epoch, EpochFlag), f64)> + '_> {
+    pub fn receiver_clock(&self) -> Box<dyn Iterator<Item = ((Epoch, EpochFlag), f64)> + '_> {
         Box::new(self.observation().filter_map(|(e, (clk, _))| {
             if let Some(clk) = clk {
                 Some((*e, *clk))

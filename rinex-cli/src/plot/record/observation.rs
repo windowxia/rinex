@@ -20,140 +20,93 @@ fn observable_to_physics(observable: &Observable) -> String {
  * Plots given Observation RINEX content
  */
 pub fn plot_observation(ctx: &QcContext, plot_context: &mut PlotContext) {
-    let record = ctx.primary_data().record.as_obs().unwrap(); // cannot fail
-
-    let mut clk_offset: Vec<(Epoch, f64)> = Vec::new();
-    // dataset
-    //  per physics,
-    //   per observable (symbolized)
-    //      per vehicle (color map)
-    //      bool: loss of lock - CS emphasis
-    //      x: sampling timestamp,
-    //      y: observation (raw),
-    let mut dataset: HashMap<String, HashMap<String, HashMap<Sv, Vec<(bool, Epoch, f64)>>>> =
-        HashMap::new();
-
-    for ((epoch, _flag), (clock_offset, vehicles)) in record {
-        if let Some(value) = clock_offset {
-            clk_offset.push((*epoch, *value));
-        }
-
-        for (sv, observations) in vehicles {
-            for (observable, data) in observations {
-                let observable_code = observable.to_string();
-                let physics = observable_to_physics(observable);
-                let y = data.obs;
-                let cycle_slip = match data.lli {
-                    Some(lli) => lli.intersects(LliFlags::LOCK_LOSS),
-                    _ => false,
-                };
-
-                if let Some(data) = dataset.get_mut(&physics) {
-                    if let Some(data) = data.get_mut(&observable_code) {
-                        if let Some(data) = data.get_mut(&sv) {
-                            data.push((cycle_slip, *epoch, y));
-                        } else {
-                            data.insert(*sv, vec![(cycle_slip, *epoch, y)]);
-                        }
+    let has_nav = ctx.has_navigation_data();
+    let primary_data = ctx.primary_data();
+    /*
+     * Plot receiver clock data, if such data exists
+     */
+    if primary_data.receiver_clock().count() > 0 {
+        plot_context.add_cartesian2d_plot("Rcvr Clock", "Clock bias [s]");
+        let data_x_ok: Vec<_> = primary_data
+            .receiver_clock()
+            .filter_map(|((e, flag), _)| if flag.is_ok() { Some(e) } else { None })
+            .collect();
+        let data_y_ok: Vec<_> = primary_data
+            .receiver_clock()
+            .filter_map(
+                |((_, flag), bias)| {
+                    if flag.is_ok() {
+                        Some(bias)
                     } else {
-                        let mut map: HashMap<Sv, Vec<(bool, Epoch, f64)>> = HashMap::new();
-                        map.insert(*sv, vec![(cycle_slip, *epoch, y)]);
-                        data.insert(observable_code, map);
+                        None
                     }
-                } else {
-                    let mut map: HashMap<Sv, Vec<(bool, Epoch, f64)>> = HashMap::new();
-                    map.insert(*sv, vec![(cycle_slip, *epoch, y)]);
-                    let mut mmap: HashMap<String, HashMap<Sv, Vec<(bool, Epoch, f64)>>> =
-                        HashMap::new();
-                    mmap.insert(observable_code, map);
-                    dataset.insert(physics.to_string(), mmap);
-                }
-            }
-        }
-    }
-
-    if clk_offset.len() > 0 {
-        plot_context.add_cartesian2d_plot("Receiver Clock Offset", "Clock Offset [s]");
-        let data_x: Vec<Epoch> = clk_offset.iter().map(|(k, _)| *k).collect();
-        let data_y: Vec<f64> = clk_offset.iter().map(|(_, v)| *v).collect();
-        let trace = build_chart_epoch_axis("Clk Offset", Mode::LinesMarkers, data_x, data_y)
+                },
+            )
+            .collect();
+        let trace = build_chart_epoch_axis("clk", Mode::Markers, data_x_ok, data_y_ok)
             .marker(Marker::new().symbol(MarkerSymbol::TriangleUp));
-        plot_context.add_trace(trace);
-        trace!("receiver clock offsets");
     }
     /*
-     * 1 plot per physics
+     * We'll design one marker per signal,
+     * we need to determine total of signals per physics
      */
-    for (physics, carriers) in dataset {
-        let y_label = match physics.as_str() {
-            "Phase" => "Carrier cycles",
-            "Doppler" => "Doppler Shifts",
-            "Signal Strength" => "Power [dB]",
-            "Pseudo Range" => "Pseudo Range",
+    let mut total_markers: HashMap<Observable, usize> = HashMap::new();
+    for observable in primary_data.observable() {
+        if let Some(count) = total_markers.get_mut(&observable) {
+            *count += 1;
+        } else {
+            total_markers.insert(observable.clone(), 1);
+        }
+    }
+    /*
+     * One plot per physics
+     */
+    for observable in primary_data.observable() {
+        let (y_label, iter) = match observable {
+            Observable::Phase(_) => ("Carrier cycles", primary_data.phase()),
+            Observable::Doppler(_) => ("Doppler Shifts", primary_data.doppler()),
+            Observable::SSI(_) => ("Power [dB]", primary_data.ssi()),
+            Observable::PseudoRange(_) => ("Pseudo Range", primary_data.pseudo_range()),
             _ => unreachable!(),
         };
-
-        if ctx.has_navigation_data() {
-            // Augmented context, we plot data on two Y axes
-            // one for physical observation, one for sat elevation
-            plot_context.add_cartesian2d_2y_plot(
-                &format!("{} Observations", physics),
-                y_label,
-                "Elevation Angle [°]",
-            );
+        // Design plot markers : one per signal
+        let total = total_markers.get(&observable).unwrap_or(&(1 as usize));
+        let markers = generate_markers(*total);
+        /*
+         * SSI observation special case
+         *  in case NAV augmentation was provided
+         *  it is useful to visualize elevation
+         *  angles at the same time. In this case,
+         *  we use a dual Y axis plot.
+         */
+        if observable.is_ssi_observable() && has_nav {
+            plot_context.add_cartesian2d_2y_plot(&observable.to_string(), y_label, "Elevation [°]");
         } else {
-            // standard mode: one axis
-            plot_context.add_cartesian2d_plot(&format!("{} Observations", physics), y_label);
-        }
-
-        let markers = generate_markers(carriers.len()); // one symbol per carrier
-        for (index, (observable, vehicles)) in carriers.iter().enumerate() {
-            for (sv, data) in vehicles {
-                let data_x: Vec<Epoch> = data.iter().map(|(_cs, e, _y)| *e).collect();
-                let data_y: Vec<f64> = data.iter().map(|(_cs, _e, y)| *y).collect();
-
-                let trace = build_chart_epoch_axis(
-                    &format!("{}({})", sv, observable),
-                    Mode::Markers,
-                    data_x,
-                    data_y,
-                )
-                .marker(Marker::new().symbol(markers[index].clone()))
-                .web_gl_mode(true)
-                .visible({
-                    if index < 1 {
-                        Visible::True
-                    } else {
-                        Visible::LegendOnly
-                    }
-                });
-                plot_context.add_trace(trace);
-
-                if index == 0 && physics == "Signal Strength" {
-                    // 1st Carrier encountered: plot Sv only once
-                    // we also only augment the SSI plot when NAV context is provided
-                    if let Some(nav) = &ctx.navigation_data() {
-                        // grab elevation angle
-                        let data: Vec<(Epoch, f64)> = nav
-                            .sv_elevation_azimuth(ctx.ground_position())
-                            .map(|(epoch, (_sv, (elev, _a)))| (epoch, elev))
-                            .collect();
-                        // plot (Epoch, Elev)
-                        let epochs: Vec<Epoch> = data.iter().map(|(e, _)| *e).collect();
-                        let elev: Vec<f64> = data.iter().map(|(_, f)| *f).collect();
-                        let trace = build_chart_epoch_axis(
-                            &format!("Elev({})", sv),
-                            Mode::LinesMarkers,
-                            epochs,
-                            elev,
-                        )
-                        .marker(Marker::new().symbol(markers[index].clone()))
-                        .visible(Visible::LegendOnly);
-                        plot_context.add_trace(trace);
-                    }
-                }
+            plot_context.add_cartesian2d_plot(&observable.to_string(), y_label);
+            /*
+             * Design one color per Sv PRN#
+             */
+            for (sv_index, sv) in primary_data.sv().enumerate() {
+                let data_x: Vec<Epoch> = primary_data
+                    .observation()
+                    .flat_map(|((e, _), (_, vehicles))| {
+                        vehicles.iter().filter_map(|(svnn, observables)| {
+                            if *svnn == sv {
+                                Some(observables)
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .filter_map(|(obs, obsdata)| {
+                        if obs == observable {
+                            Some(obsdata)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
             }
         }
-        trace!("{} observations", y_label);
     }
 }
