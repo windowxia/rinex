@@ -459,3 +459,217 @@ impl HtmlReport for RnxContext {
         }
     }
 }
+
+/*
+ * Seamless RINEX Context to RTCM encoding
+ * Requires both Observation and Navigation features
+ * because we're interested in converting Navigation data to position solvers here
+ */
+#[cfg(feature = "rtcm")]
+use rtcm::{
+    msg::{Msg1001Sat, Msg1001T, Msg1032T, Msg1033T, Msg1041T},
+    prelude::*,
+    util::{DataVec, Df88591String},
+};
+
+#[derive(Default, Clone, Debug)]
+enum HeaderIterState {
+    #[default]
+    Agency,
+    Station,
+    AntennaSn,
+    AntennaArp,
+    Rcvr,
+    Dcb,
+}
+
+#[derive(Default, Clone, Debug)]
+enum RecordIterState {
+    #[default]
+    Phase,
+    PseudoRange,
+    Ephemeride,
+    SP3,
+}
+
+use std::iter::Cycle;
+
+pub struct RnxContextIterator<'a> {
+    // True if we're still serving Header attributes
+    // otherwise, we're serving file data
+    inside_header: bool,
+    // Current SV
+    sv: Cycle<Box<dyn Iterator<Item = SV>>>,
+    // Current Epoch
+    epoch: Epoch,
+    // Context from which we work on
+    ctx: &'a RnxContext,
+    // FSM when serving Header fields
+    header_state: HeaderIterState,
+    // FSM when serving Data
+    record_state: RecordIterState,
+}
+
+fn header_iter_fsm<'a>(iter: &'a mut RnxContextIterator) -> Option<Message> {
+    let mut ret: Option<Message> = None;
+    match iter.header_state {
+        HeaderIterState::Agency => {
+            iter.header_state = HeaderIterState::Station;
+        },
+        HeaderIterState::Station => {
+            iter.header_state = HeaderIterState::AntennaSn;
+        },
+        HeaderIterState::AntennaSn => {
+            iter.header_state = HeaderIterState::AntennaArp;
+            ret = Some(Message::Msg1033(Msg1033T {
+                reference_station_id: 0_u16,
+                antenna_descriptor_len: 0,
+                antenna_descriptor_str: Df88591String::from("todo"),
+                antenna_setup_id: 0_u8,
+                antenna_serial_number_len: 0,
+                antenna_serial_number_str: Df88591String::from("todo"),
+                receiver_type_descriptor_len: 0,
+                receiver_type_descriptor_str: Df88591String::from("todo"),
+                receiver_firmware_version_len: 0,
+                receiver_firmware_version_str: Df88591String::from("todo"),
+                receiver_serial_number_len: 0,
+                receiver_serial_number_str: Df88591String::from("todo"),
+            }));
+        },
+        HeaderIterState::AntennaArp => {
+            iter.header_state = HeaderIterState::Rcvr;
+            ret = Some(Message::Msg1032(Msg1032T {
+                non_physical_reference_station_id: 0_u16,
+                physical_reference_station_id: 0_u16,
+                reserved_36_6: 0_u8,
+                phys_ref_arp_ecef_x_m: 0.0_f64,
+                phys_ref_arp_ecef_y_m: 0.0_f64,
+                phys_ref_arp_ecef_z_m: 0.0_f64,
+            }));
+        },
+        HeaderIterState::Rcvr => {},
+        HeaderIterState::Dcb => {},
+    }
+    ret
+}
+
+fn record_iter_fsm<'a>(iter: &'a mut RnxContextIterator) -> Option<Message> {
+    let mut ret: Option<Message> = None;
+    match iter.record_state {
+        RecordIterState::Phase => {},
+        RecordIterState::PseudoRange => {},
+        RecordIterState::Ephemeride => {
+            iter.record_state = RecordIterState::SP3;
+            ret = Some(Message::Msg1041(Msg1041T {
+                navic_satellite_id: 0_u8,
+                navic_week_number: 0_u16,
+                af0_s: 0.0_f64,
+                af1_s_s: 0.0_f32,
+                af2_s_s2: 0.0_f32,
+                ura_index: 0_u8,
+                toc_s: 0.0_f32,
+                tgd_s: 0.0_f32,
+                delta_n_sc_s: 0.0_f64,
+                iodec: 0_u8,
+                reserved_132_10: 0_u16,
+                l5_flag: 0_u8,
+                s_flag: 0_u8,
+                cuc_rad: 0.0_f32,
+                cus_rad: 0.0_f32,
+                cic_rad: 0.0_f32,
+                cis_rad: 0.0_f32,
+                crc_m: 0.0_f32,
+                crs_m: 0.0_f32,
+                idot_sc_s: 0.0_f64,
+                m0_sc: 0.0_f64,
+                toe_s: 0.0_f32,
+                eccentricity: 0.0_f64,
+                sqrt_a_sqrt_m: 0.0_f64,
+                omega0_sc: 0.0_f64,
+                omega_sc: 0.0_f64,
+                omegadot_sc_s: 0.0_f64,
+                i0_sc: 0.0_f64,
+                spare_idot: 0_u8,
+                spare_i0: 0_u8,
+            }));
+        },
+        RecordIterState::SP3 => {},
+    }
+    ret
+}
+
+#[cfg(feature = "rtcm")]
+#[cfg(feature = "obs")]
+#[cfg(feature = "nav")]
+#[cfg_attr(docrs, doc(cfg(feature = "rtcm")))]
+#[cfg_attr(docrs, doc(cfg(feature = "obs")))]
+#[cfg_attr(docrs, doc(cfg(feature = "nav")))]
+// impl RnxContextIter {
+impl<'a> Iterator for RnxContextIterator<'a> {
+    type Item = Message;
+    fn next(&mut self) -> Option<Message> {
+        match self.inside_header {
+            true => header_iter_fsm(self),
+            false => None,
+        }
+
+        //let ant_position_ecef = self.ground_position().map(|p| (0.0_f64, 0.0_f64, 0.0_f64));
+
+        //self.primary_data()
+        //    .observation()
+        //    .flat_map(move |((epoch, flag), (clk_offset, data))| {
+        //        data.iter().flat_map(move |(sv, observables)| {
+        //            observables.iter().filter_map(move |(observable, obsdata)| {
+        //                let encoding = builder.build_message(&Message::Msg1001(Msg1001T {
+        //                    //TODO
+        //                    reference_station_id,
+        //                    //TODO
+        //                    gps_epoch_time_ms: 0,
+        //                    //TODO
+        //                    synchronous_gnss_msg_flag: 0,
+        //                    // TODO
+        //                    satellites_len: 0,
+        //                    // TODO
+        //                    gps_divergence_free_smoothing_flag: 0,
+        //                    gps_smoothing_interval_bitval: 0,
+        //                    satellites: {
+        //                        let mut satellites = DataVec::new();
+        //                        satellites.push(Msg1001Sat {
+        //                            gps_satellite_id: 20,
+        //                            gps_l1_code_ind: 0,
+        //                            gps_l1_pseudorange_m: None,
+        //                            gps_l1_phase_pseudorange_diff_m: None,
+        //                            gps_l1_lock_time_bitval: 0,
+        //                        });
+        //                        satellites
+        //                    },
+        //                }));
+        //                if let Ok(encoding) = &encoding {
+        //                    Some(encoding)
+        //                } else {
+        //                    None
+        //                }
+        //            })
+        //        })
+        //    })
+    }
+}
+
+impl<'a> RnxContextIterator<'a> {
+    fn new(ctx: &'a RnxContext) -> Self {
+        Self {
+            ctx,
+            inside_header: true,
+            header_state: HeaderIterState::default(),
+            record_state: RecordIterState::default(),
+            /*
+             * Infinite SV iterator
+             */
+            sv: ctx.primary_data().sv().cycle(),
+            /*
+             * Finite Epoch iterator
+             */
+            epoch: ctx.primary_data().epoch(),
+        }
+    }
+}

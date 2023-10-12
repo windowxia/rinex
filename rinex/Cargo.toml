@@ -20,7 +20,12 @@ meteo = []
 nav = []
 ionex = []
 processing = []
-qc = ["rinex-qc-traits", "horrorshow"] # rinex Quality Check (mainly OBS RINEX) 
+
+# rinex Quality Check report and reporting traits
+qc = ["rinex-qc-traits", "horrorshow"] 
+
+# seamless RINEX2RTCM encoding
+rtcm = ["rtcm-rs"]
 
 # enable everything
 full = [
@@ -32,6 +37,7 @@ full = [
     "obs",
     "processing",
     "qc",
+    "rtcm-rs",
     "sbas",
     "serde",
 ]
@@ -68,6 +74,7 @@ horrorshow = { version = "0.8", optional = true }
 gnss-rs = { path = "../gnss-rs", version = "=2.1", features = ["serde"] }
 rinex-qc-traits = { path = "../qc-traits", version = "=0.1.1", optional = true }
 sp3 = { path = "../sp3", version = "=1.0.6" }
+rtcm-rs = { version = "0.6", optional = true } 
 
 [dev-dependencies]
 serde_json = "1"

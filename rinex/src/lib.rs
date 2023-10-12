@@ -35,6 +35,9 @@ mod tests;
 #[macro_use]
 mod macros;
 
+#[cfg(feature = "rtcm")]
+extern crate rtcm_rs as rtcm;
+
 extern crate num;
 
 #[macro_use]
