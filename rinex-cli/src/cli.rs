@@ -3,7 +3,6 @@ use gnss_rtk::prelude::RTKConfig;
 use log::{error, info};
 use rinex::prelude::*;
 use rinex_qc::QcOpts;
-use std::fs::ReadDir;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -127,9 +126,9 @@ Refer to rinex-cli/doc/preprocessing.md to learn how to operate this interface."
                 .next_help_heading("Observation RINEX")
                     .arg(Arg::new("observables")
                         .long("observables")
-                        .short('o')
+                        .long("obs")
                         .action(ArgAction::SetTrue)
-                        .help("Identify observables. Applies to Observation and Meteo RINEX"))
+                        .help("Identify observables in either Observation Data or Meteo Data contained in context."))
                     .arg(Arg::new("ssi-range")
                         .long("ssi-range")
                         .action(ArgAction::SetTrue)
@@ -292,28 +291,35 @@ This is the most performant mode to solve a position."))
 						.long("rtk-cfg")
 						.value_name("FILE")
 						.help("Pass RTK custom configuration."))
-                    .arg(Arg::new("kml")
-                        .long("kml")
-                        .help("Form a KML track with resolved positions.
-This turns off the default visualization."))
                 .next_help_heading("File operations")
                     .arg(Arg::new("merge")
                         .short('m')
-                        .value_name("FILE")
                         .long("merge")
-                        .help("Merges this RINEX into `--fp`"))
+                        .value_name("FILE(s)")
+                        .action(ArgAction::Append)
+                        .help("Merge given RINEX this RINEX into primary RINEX.
+Primary RINEX was either loaded with `-f`, or is Observation RINEX loaded with `-d`"))
                     .arg(Arg::new("split")
                         .long("split")
                         .value_name("Epoch")
                         .short('s')
                         .help("Split RINEX into two separate files"))
-                .next_help_heading("RINEX output")
+                .next_help_heading("File generation")
+					.arg(Arg::new("gpx")
+						.long("gpx")
+                        .action(ArgAction::SetTrue)
+						.help("Enable GPX formatting. In RTK mode, a GPX track is generated."))
+					.arg(Arg::new("kml")
+						.long("kml")
+                        .action(ArgAction::SetTrue)
+						.help("Enable KML formatting. In RTK mode, a KML track is generated."))
                     .arg(Arg::new("output")
-                        .long("output")
+                        .short('o')
+                        .long("out")
                         .value_name("FILE")
                         .action(ArgAction::Append)
-                        .help("Custom file paths to be generated from preprocessed RINEX files.
-For example -fp was filtered and decimated, use --output to dump results into a new RINEX."))
+                        .help("Custom file name to be generated within Workspace.
+Allows merged file name to be customized."))
                     .arg(Arg::new("custom-header")
                         .long("custom-header")
                         .value_name("JSON")
@@ -522,6 +528,12 @@ Refer to README"))
     pub fn rtk_only(&self) -> bool {
         self.matches.get_flag("rtk-only")
     }
+    pub fn gpx(&self) -> bool {
+        self.matches.get_flag("gpx")
+    }
+    pub fn kml(&self) -> bool {
+        self.matches.get_flag("kml")
+    }
     pub fn rtk_config(&self) -> Option<RTKConfig> {
         if let Some(path) = self.matches.get_one::<String>("rtk-config") {
             if let Ok(content) = std::fs::read_to_string(path) {
@@ -553,11 +565,12 @@ Refer to README"))
     pub fn to_merge(&self) -> Option<Rinex> {
         if let Some(path) = self.merge_path() {
             let path = path.to_str().unwrap();
-            if let Ok(rnx) = Rinex::from_file(path) {
-                Some(rnx)
-            } else {
-                error!("failed to parse \"{}\"", path);
-                None
+            match Rinex::from_file(path) {
+                Ok(rnx) => Some(rnx),
+                Err(e) => {
+                    error!("failed to parse \"{}\", {}", path, e);
+                    None
+                },
             }
         } else {
             None
@@ -577,48 +590,6 @@ Refer to README"))
             }
         } else {
             None
-        }
-    }
-    /*
-     * Returns possible list of directories passed as specific data pool
-     */
-    pub fn data_directories(&self, key: &str) -> Vec<ReadDir> {
-        if let Some(matches) = self.matches.get_many::<String>(key) {
-            matches
-                .filter_map(|s| {
-                    let path = Path::new(s.as_str());
-                    if path.is_dir() {
-                        if let Ok(rd) = path.read_dir() {
-                            Some(rd)
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        } else {
-            vec![]
-        }
-    }
-    /*
-     * Returns possible list of files to be loaded individually
-     */
-    pub fn data_files(&self, key: &str) -> Vec<String> {
-        if let Some(matches) = self.matches.get_many::<String>(key) {
-            matches
-                .filter_map(|s| {
-                    let path = Path::new(s.as_str());
-                    if path.is_file() {
-                        Some(path.to_string_lossy().to_string())
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        } else {
-            vec![]
         }
     }
     fn manual_ecef(&self) -> Option<&String> {

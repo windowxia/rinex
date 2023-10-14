@@ -7,6 +7,7 @@ mod cli; // command line interface
 pub mod fops; // file operation helpers
 mod identification; // high level identification/macros
 mod plot; // plotting operations
+mod rtk_postproc; // rtk results post processing
 
 mod preprocessing;
 use preprocessing::preprocess;
@@ -35,15 +36,26 @@ use env_logger::{Builder, Target};
 extern crate log;
 
 use fops::open_with_web_browser;
+use rtk_postproc::rtk_postproc;
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("rinex error")]
+    RinexError(#[from] rinex::Error),
+    #[error("rtk post proc error")]
+    RTKPostError(#[from] rtk_postproc::Error),
+}
 
 /*
  * Workspace location is fixed to rinex-cli/product/$primary
  * at the moment
  */
-fn workspace_path(ctx: &RnxContext) -> PathBuf {
+pub fn workspace_path(ctx: &RnxContext) -> PathBuf {
     let primary_stem: &str = ctx
         .primary_paths()
         .first()
@@ -102,7 +114,11 @@ fn build_context(cli: &Cli) -> RnxContext {
     let pathbf = Path::new(path).to_path_buf();
     let ctx = RnxContext::new(pathbf);
     if ctx.is_err() {
-        error!("failed to load desired context \"{}\"", path);
+        panic!(
+            "failed to load desired context \"{}\", : {:?}",
+            path,
+            ctx.err().unwrap()
+        );
     }
     let mut ctx = ctx.unwrap();
     /*
@@ -158,7 +174,7 @@ fn skyplot_allowed(ctx: &RnxContext, cli: &Cli) -> bool {
     has_nav && has_ref_position
 }
 
-pub fn main() -> Result<(), rinex::Error> {
+pub fn main() -> Result<(), Error> {
     let mut builder = Builder::from_default_env();
     builder
         .target(Target::Stdout)
@@ -366,23 +382,24 @@ pub fn main() -> Result<(), rinex::Error> {
      * MERGE
      */
     if let Some(rinex_b) = cli.to_merge() {
-        info!("merging files..");
-
-        // [1] proceed to merge
         let new_rinex = ctx
             .primary_data()
             .merge(&rinex_b)
-            .expect("merging operation failed");
+            .expect("failed to merge both files");
 
-        //TODO: make this path programmable
-        let path = workspace.clone().join("merged.rnx");
+        let filename = match cli.output_path() {
+            Some(path) => path.clone(),
+            None => String::from("merged.rnx"),
+        };
+
+        let path = workspace.clone().join(&filename);
 
         let path = path
             .as_path()
             .to_str()
             .expect("failed to generate merged file");
 
-        // [2] generate new file
+        // generate new file
         new_rinex
             .to_file(path)
             .expect("failed to generate merged file");
@@ -526,48 +543,40 @@ pub fn main() -> Result<(), rinex::Error> {
             open_with_web_browser(&report_path.to_string_lossy());
         }
     }
+
+    if !rtk {
+        return Ok(());
+    }
+
     if let Ok(ref mut solver) = solver {
-        // position solver is feasible, with provided context
+        /* init */
+        match solver.init(&mut ctx) {
+            Err(e) => panic!("failed to initialize rtk solver - {}", e),
+            Ok(_) => info!("entering rtk mode"),
+        }
+
+        // position solver feasible & deployed
         let mut solving = true;
         let mut results: HashMap<Epoch, SolverEstimate> = HashMap::new();
 
-        if rtk {
-            match solver.init(&mut ctx) {
-                Err(e) => panic!("failed to initialize rtk solver - {}", e),
-                Ok(_) => info!("entering rtk mode"),
+        while solving {
+            match solver.run(&mut ctx) {
+                Ok((t, estimate)) => {
+                    trace!("{:?}", t);
+                    results.insert(t, estimate);
+                },
+                Err(SolverError::NoSv(t)) => info!("no SV elected @{}", t),
+                Err(SolverError::LessThan4Sv(t)) => info!("less than 4 SV @{}", t),
+                Err(SolverError::SolvingError(t)) => {
+                    error!("failed to invert navigation matrix @ {}", t)
+                },
+                Err(SolverError::EpochDetermination(_)) => {
+                    solving = false; // abort
+                },
+                Err(e) => panic!("fatal error {:?}", e),
             }
-            while solving {
-                match solver.run(&mut ctx) {
-                    Ok((t, estimate)) => {
-                        trace!(
-                            "epoch: {}
-position error: {:.6E}, {:.6E}, {:.6E}
-HDOP {:.5E} | VDOP {:.5E}
-clock offset: {:.6E} | TDOP {:.5E}",
-                            t,
-                            estimate.dx,
-                            estimate.dy,
-                            estimate.dz,
-                            estimate.hdop,
-                            estimate.vdop,
-                            estimate.dt,
-                            estimate.tdop
-                        );
-                        results.insert(t, estimate);
-                    },
-                    Err(SolverError::NoSv(t)) => info!("no SV elected @{}", t),
-                    Err(SolverError::LessThan4Sv(t)) => info!("less than 4 SV @{}", t),
-                    Err(SolverError::SolvingError(t)) => {
-                        error!("failed to invert navigation matrix @ {}", t)
-                    },
-                    Err(SolverError::EpochDetermination(_)) => {
-                        solving = false; // abort
-                    },
-                    Err(e) => panic!("fatal error {:?}", e),
-                }
-            }
-            info!("done");
         }
+        rtk_postproc(workspace, &cli, &ctx, results)?;
     }
     Ok(())
 } // main
