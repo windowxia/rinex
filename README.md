@@ -68,8 +68,9 @@ wrap in CGGTTS format which is dedicated to (remote) clock comparison
 * [`qc-traits`](qc-traits/) declares Traits that are shared between `rinex` and `rinex-qc`
 * [`sinex`](sinex/) SNX dedicated core library
 
-* [`ublox-rnx`](ublox-rnx/) is an application intended to generate RINEX Data
-from raw uBlox GNSS receiver frames. This application is work in progress at the moment.
+* [`ubx2rnx`](ubx2rnx/) is a seamless UBX stream to RINEX Data service.  
+The service continuously generates RINEX data from a uBlox receiver.
+It either serves the RINEX file to an FTP server or saves them locally.
 
 ## Other tools and relevant Ecosystems
 
