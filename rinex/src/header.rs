@@ -1274,6 +1274,13 @@ impl Header {
         s
     }
 
+    /// adds one comment to header section
+    pub fn with_comment(&self, c: &str) -> Self {
+        let mut s = self.clone();
+        s.comments.push(c.to_string());
+        s
+    }
+
     /// adds comments to Self
     pub fn with_comments(&self, c: Vec<String>) -> Self {
         let mut s = self.clone();

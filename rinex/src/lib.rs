@@ -67,6 +67,7 @@ pub mod prelude {
     pub use crate::header::Header;
     pub use crate::observable::Observable;
     pub use crate::types::Type as RinexType;
+    pub use crate::version::Version as RinexVersion;
     pub use crate::Rinex;
     pub use gnss::prelude::Constellation;
     pub use gnss::prelude::SV;

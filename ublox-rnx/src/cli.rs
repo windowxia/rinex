@@ -1,12 +1,10 @@
-use clap::{
-    Arg,
-    //ArgAction,
-    ArgMatches,
-    ColorChoice,
-    Command,
-};
-// use log::{error, info};
-// use std::path::Path;
+use clap::{Arg, ArgAction, ArgMatches, ColorChoice, Command};
+
+use log::info;
+use std::str::FromStr;
+
+use crate::Output;
+use rinex::prelude::RinexVersion;
 
 pub struct Cli {
     /// Arguments passed by user
@@ -39,16 +37,26 @@ impl Cli {
                             .help("Set port baudrate, default: \"9600\""),
                     )
                     .arg(
-                        Arg::new("observation")
-                            .short('o')
-                            .long("obs")
-                            .help("Generate RINEX Observation, disabled by default"),
+                        Arg::new("version")
+                            .short('v')
+                            .long("ver")
+                            .value_name("RINEX_VER")
+                            .help("Set custom RINEX format revision, default: V4"),
+                    )
+                    .next_help_heading("Compression")
+                    .arg(
+                        Arg::new("crinex")
+                            .short('c')
+                            .long("crinex")
+                            .action(ArgAction::SetTrue)
+                            .help("Activate CRINEX compressed Observation generation"),
                     )
                     .arg(
-                        Arg::new("navigation")
-                            .short('n')
-                            .long("nav")
-                            .help("Generate RINEX Navigation, disabled by default"),
+                        Arg::new("gzip")
+                            .short('g')
+                            .long("gzip")
+                            .action(ArgAction::SetTrue)
+                            .help("Activate GZip compression"),
                     )
                     .get_matches()
             },
@@ -70,12 +78,27 @@ impl Cli {
             Ok(9600)
         }
     }
-    /* returns true if Observation Data to be generated */
-    pub fn observation(&self) -> bool {
-        self.matches.get_flag("observation")
-    }
     /* returns true if Navigation Data to be generated */
-    pub fn navigation(&self) -> bool {
-        self.matches.get_flag("navigation")
+    pub fn output(&self) -> Output {
+        Output::StdOut
+    }
+    pub fn crinex(&self) -> bool {
+        self.matches.get_flag("crinex")
+    }
+    pub fn gzip(&self) -> bool {
+        self.matches.get_flag("gzip")
+    }
+    pub fn version(&self) -> RinexVersion {
+        if let Some(custom) = self.matches.get_one::<String>("version") {
+            if let Ok(vers) = RinexVersion::from_str(custom) {
+                vers
+            } else {
+                panic!("invalid version descriptor \"{}\"", custom);
+            }
+        } else {
+            let rev = RinexVersion::new(4, 0);
+            info!("using default rinex rev: {}", rev);
+            rev
+        }
     }
 }
