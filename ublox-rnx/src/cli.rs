@@ -16,7 +16,7 @@ impl Cli {
     pub fn new() -> Self {
         Self {
             matches: {
-                Command::new("ubx2rnx")
+                Command::new("ublox-rnx")
                     .author("Guillaume W. Bres, <guillaume.bressaix@gmail.com>")
                     .version(env!("CARGO_PKG_VERSION"))
                     .about("RINEX generator from UBlox device")
