@@ -3,7 +3,7 @@
 #[cfg(feature = "flate2")]
 use flate2::{write::GzEncoder, Compression};
 use std::fs::File;
-use std::io::{Write, BufWriter};
+use std::io::{BufWriter, Write};
 
 #[derive(Debug)]
 pub enum RinexWriter<W: Write> {
@@ -24,9 +24,10 @@ impl<W: Write> RinexWriter<W> {
     #[cfg(feature = "flate2")]
     #[cfg_attr(docrs, doc(cfg(feature = "flate2")))]
     pub fn new_gzip(w: W, compression_lvl: u32) -> Self {
-            Self::GzipRinex(
-                BufWriter::new(
-                    GzEncoder::new(w, Compression::new(compression_lvl))))
+        Self::GzipRinex(BufWriter::new(GzEncoder::new(
+            w,
+            Compression::new(compression_lvl),
+        )))
     }
 }
 

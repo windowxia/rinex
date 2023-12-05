@@ -1794,3 +1794,22 @@ pub(crate) fn code_multipath(
     }
     ret
 }
+
+/*
+ * Data production method
+ */
+use crate::prelude::RinexWriter;
+use std::io::Write;
+
+pub(crate) fn write_record<W: Write>(
+    rec: &Record,
+    crinex_compress: bool,
+    head: &Header,
+    w: &mut RinexWriter<W>,
+) -> Result<usize, std::io::Error> {
+    let mut total: usize = 0;
+    for ((epoch, flag), (clock_offset, observations)) in rec.iter() {
+        w.write(fmt_epoch(*epoch, *flag, clock_offset, observations, head).as_bytes())?;
+    }
+    Ok(total)
+}

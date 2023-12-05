@@ -23,11 +23,11 @@ pub mod split;
 pub mod types;
 pub mod version;
 
-mod leap;
-mod writer;
-mod observable;
 mod bibliography;
 mod ground_position;
+mod leap;
+mod observable;
+mod writer;
 
 #[cfg(test)]
 mod tests;
@@ -45,7 +45,6 @@ extern crate lazy_static;
 
 pub mod reader;
 use reader::BufferedReader;
-use std::io::Write; //, Read};
 
 use std::collections::{BTreeMap, HashMap};
 use thiserror::Error;
@@ -3284,9 +3283,29 @@ mod test {
 /*
  * RINEX production methods
  */
+use crate::prelude::RinexWriter;
+use crate::record::Record;
+use crate::{
+    meteo::record::write_record as write_meteo_record,
+    observation::record::write_record as write_obs_record,
+};
+use std::io::Write;
+
 impl Rinex {
     pub fn write<W: Write>(&self, w: &mut RinexWriter<W>) -> Result<usize, std::io::Error> {
-        self.header.write(w)
+        self.header.write(w)?;
+        /*
+         * RINEX fmt dependent process
+         */
+        match &self.record {
+            Record::MeteoRecord(rec) => write_meteo_record(rec, &self.header, w),
+            Record::ObsRecord(rec) => {
+                write_obs_record(rec, self.header.is_crinex(), &self.header, w)
+            },
+            Record::AntexRecord(rec) => panic!("not supported yet"),
+            Record::ClockRecord(rec) => panic!("not supported yet"),
+            Record::IonexRecord(rec) => panic!("not supported yet"),
+            Record::NavRecord(rec) => panic!("not supported yet"),
+        }
     }
 }
-

@@ -1,23 +1,30 @@
 #[cfg(test)]
 mod test {
+    use crate::prelude::RinexWriter;
     use crate::tests::toolkit::{random_name, test_against_model};
     use crate::*;
+    use std::fs::File;
     use std::path::Path;
     fn testbench(path: &str) {
         // parse this file
         let rnx = Rinex::from_file(path).unwrap(); // already tested elsewhere
-        let tmp_path = format!("test-{}.rnx", random_name(5));
-        assert!(rnx.to_file(&tmp_path).is_ok()); // test writer
-        let copy = Rinex::from_file(&tmp_path);
+        let fpath = random_name(5);
+        let fd = File::create(&fpath).unwrap();
+        let mut writer = RinexWriter::new(fd);
+        assert!(rnx.write(&mut writer).is_ok(), "failed to write {}", path);
+
+        let copy = Rinex::from_file(&fpath);
         assert!(copy.is_ok()); // content should be valid
         let copy = copy.unwrap();
+
         // run comparison
         if copy != rnx {
             test_against_model(&copy, &rnx, path, 1.0E-6);
         }
         println!("production test passed for \"{}\"", path);
+
         // remove copy
-        let _ = std::fs::remove_file(tmp_path);
+        let _ = std::fs::remove_file(&fpath);
     }
     #[test]
     #[cfg(feature = "flate2")]

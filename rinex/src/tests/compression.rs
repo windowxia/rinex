@@ -87,10 +87,11 @@ mod test {
             let rnx = rnx.unwrap();
             let compressed = rnx.rnx2crnx1();
 
-            let tmp_path = format!("test-{}.crx", random_name(8));
-
+            let fpath = random_name(8);
+            let mut fd = std::fs::File::create(&fpath).unwrap();
+            let mut writer = RinexWriter::new(fd);
             assert!(
-                compressed.to_file(&tmp_path).is_ok(),
+                compressed.write(&mut writer).is_ok(),
                 "{}{}",
                 "failed to format compressed rinex",
                 testfile
@@ -106,7 +107,7 @@ mod test {
             );
 
             // remove generated file
-            let _ = std::fs::remove_file(&tmp_path);
+            let _ = std::fs::remove_file(&fpath);
         }
     }
     #[test]
@@ -191,10 +192,12 @@ mod test {
             let rnx = rnx.unwrap();
             let compressed = rnx.rnx2crnx1();
 
-            let tmp_path = format!("test-{}.crx", random_name(8));
+            let fpath = random_name(8);
+            let fd = std::fs::File::create(&fpath).unwrap();
+            let mut writer = RinexWriter::new(fd);
 
             assert!(
-                compressed.to_file(&tmp_path).is_ok(),
+                compressed.write(&mut writer).is_ok(),
                 "{}{}",
                 "failed to format compressed rinex",
                 testfile
@@ -210,7 +213,7 @@ mod test {
             );
 
             // remove generated file
-            let _ = std::fs::remove_file(&tmp_path);
+            let _ = std::fs::remove_file(&fpath);
         }
     }
 }

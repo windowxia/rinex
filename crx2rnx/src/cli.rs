@@ -1,5 +1,5 @@
+use clap::{Arg, ArgAction, ArgMatches, ColorChoice, Command};
 use std::path::{Path, PathBuf};
-use clap::{Arg, ArgMatches, ArgAction, ColorChoice, Command};
 
 pub struct Cli {
     /// arguments passed by user
@@ -20,24 +20,28 @@ impl Cli {
                         Arg::new("input")
                             .short('i')
                             .help("Input RINEX file")
-                            .required(true)
-                    )
-                    .arg(
-                        Arg::new("output")
-                            .short('o')
-                            .help("Custom output file name")
-                    )
-                    .arg(
-                        Arg::new("gzip")
-                            .short('g')
-                            .help("Activate Gzip compression")
-                            .action(ArgAction::SetTrue)
+                            .required(true),
                     )
                     .arg(
                         Arg::new("workspace")
                             .short('w')
                             .long("workspace")
-                            .help("Define custom workspace location")
+                            .help("Define custom workspace location"),
+                    )
+                    .next_help_heading("Output")
+                    .arg(Arg::new("output").short('o').help(
+                        "Customize output file name. Otherwise, we use the same station name.",
+                    ))
+                    .arg(
+                        Arg::new("gzip")
+                            .short('g')
+                            .help("Activate Gzip compression. Output is gzip compressed.")
+                            .action(ArgAction::SetTrue),
+                    )
+                    .arg(
+                        Arg::new("gzip-lvl").short('c').help(
+                            "Set custom gzip compression level, 1 <= lvl <= 9, default is 6.",
+                        ),
                     )
                     .get_matches()
             },
@@ -54,5 +58,12 @@ impl Cli {
     }
     pub fn gzip(&self) -> bool {
         self.matches.get_flag("gzip")
+    }
+    pub fn gzip_compression_lvl(&self) -> u32 {
+        if let Some(lvl) = self.matches.get_one::<String>("gzip-lvl") {
+            lvl.parse::<u32>().unwrap_or(6)
+        } else {
+            6
+        }
     }
 }

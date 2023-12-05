@@ -68,8 +68,10 @@ mod test {
 
         // dump
         let merged = merged.unwrap();
+        let fd = std::fs::File::create("merge.txt").unwrap();
+        let mut writer = RinexWriter::new(fd);
         assert!(
-            merged.to_file("merge.txt").is_ok(),
+            merged.write(&mut writer).is_ok(),
             "failed to generate file previously merged"
         );
         assert!(
@@ -129,6 +131,11 @@ mod test {
 
         let merged = merged.unwrap();
 
+        assert!(
+            merged.is_merged(),
+            "is_merged() should be true after merging!"
+        );
+
         test_observation_rinex(
             &merged,
             "2.11",
@@ -145,15 +152,12 @@ mod test {
         );
 
         // dump
+        let fd = std::fs::File::create("merge.txt").unwrap();
+        let mut writer = RinexWriter::new(fd);
         assert!(
-            merged.to_file("merge.txt").is_ok(),
+            merged.write(&mut writer).is_ok(),
             "failed to generate file previously merged"
         );
-        assert!(
-            merged.is_merged(),
-            "is_merged() should be true after merging!"
-        );
-
         // parse back
         let rnx = Rinex::from_file("merge.txt");
         assert!(rnx.is_ok(), "Failed to parsed back previously merged file");

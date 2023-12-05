@@ -1,5 +1,5 @@
+use rinex::prelude::{Rinex, RinexWriter};
 use std::path::{Path, PathBuf};
-use rinex::prelude::{RinexWriter, Rinex};
 
 mod cli;
 use cli::Cli;
@@ -23,7 +23,7 @@ fn create_workspace(path: &PathBuf) {
     });
 }
 
-fn input_name(path: &PathBuf) -> String {
+fn station_name(path: &PathBuf) -> String {
     let stem = path
         .file_stem()
         .expect("failed to determine input file name")
@@ -68,15 +68,15 @@ fn main() -> Result<(), rinex::Error> {
     let cli = Cli::new();
 
     let input_path = cli.input_path();
-    let input_name = input_name(&input_path);
-    println!("decompressing \"{}\"..", input_name);
+    let station_name = station_name(&input_path);
+    println!("decompressing \"{}\"..", station_name);
 
-    let workspace_path = workspace(&cli).join(&input_name);
+    let workspace_path = workspace(&cli).join(&station_name);
     create_workspace(&workspace_path);
 
     let output_name = match cli.output_name() {
         Some(name) => name.clone(),
-        _ => output_filename(&input_name, &input_path),
+        _ => output_filename(&station_name, &input_path),
     };
 
     let filepath = input_path.to_string_lossy();
@@ -89,11 +89,11 @@ fn main() -> Result<(), rinex::Error> {
 
     let mut writer = match cli.gzip() {
         false => RinexWriter::new(fd),
-        true => RinexWriter::new_gzip(fd, 6),
+        true => RinexWriter::new_gzip(fd, cli.gzip_compression_lvl()),
     };
 
     rinex.write(&mut writer)?;
-    
+
     println!("\"{}\" generated", outputpath.clone());
     Ok(())
 }

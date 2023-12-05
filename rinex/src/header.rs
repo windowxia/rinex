@@ -1802,12 +1802,12 @@ impl std::fmt::Display for Header {
 /*
  * HEADER production methods
  */
-use std::io::Write;
 use crate::prelude::RinexWriter;
+use std::io::Write;
 
 impl Header {
     pub(crate) fn write<W: Write>(&self, w: &mut RinexWriter<W>) -> Result<usize, std::io::Error> {
-        w.write(b"HEADER")
+        w.write(format!("{}", self).as_bytes())
     }
 }
 

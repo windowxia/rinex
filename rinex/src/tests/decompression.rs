@@ -1,12 +1,14 @@
 #[cfg(test)]
 mod test {
     use crate::hatanaka::Decompressor;
+    use crate::prelude::RinexWriter;
     use crate::tests::toolkit::random_name;
     use crate::tests::toolkit::test_observation_rinex;
     use crate::{erratic_time_frame, evenly_spaced_time_frame, tests::toolkit::TestTimeFrame};
     use crate::{observable, prelude::*};
     use itertools::Itertools;
     use std::collections::HashMap;
+    use std::fs::File;
     use std::path::Path;
     use std::str::FromStr;
     #[test]
@@ -146,11 +148,14 @@ mod test {
                     "30 s"),
                 );
             }
-            // decompress and write to file
+            // decompress
             rnx.crnx2rnx_mut();
-            let filename = format!("{}.rnx", random_name(10));
+            // write to file
+            let filename = random_name(8);
+            let fd = File::create(filename).unwrap();
+            let mut writer = RinexWriter::new(fd);
             assert!(
-                rnx.to_file(&filename).is_ok(),
+                rnx.write(&mut writer).is_ok(),
                 "failed to dump \"{}\" after decompression",
                 crnx_name
             );
@@ -169,7 +174,7 @@ mod test {
             // test_toolkit::test_against_model(&rnx, &model, &path);
 
             // remove copy
-            let _ = std::fs::remove_file(filename);
+            let _ = std::fs::remove_file(&path);
         }
     }
     #[test]

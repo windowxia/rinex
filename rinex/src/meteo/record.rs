@@ -109,11 +109,7 @@ pub(crate) fn parse_epoch(
  * Epoch formatter
  * is used when we're dumping a Meteo RINEX record entry
  */
-pub(crate) fn fmt_epoch(
-    epoch: &Epoch,
-    data: &HashMap<Observable, f64>,
-    header: &Header,
-) -> Result<String, Error> {
+pub(crate) fn fmt_epoch(epoch: &Epoch, data: &HashMap<Observable, f64>, header: &Header) -> String {
     let mut lines = String::with_capacity(128);
     lines.push_str(&format!(
         " {}",
@@ -133,7 +129,7 @@ pub(crate) fn fmt_epoch(
         }
     }
     lines.push('\n');
-    Ok(lines)
+    lines
 }
 
 #[cfg(test)]
@@ -411,4 +407,22 @@ impl Interpolate for Record {
     fn interpolate_mut(&mut self, _series: TimeSeries) {
         unimplemented!("meteo:record:interpolate_mut()")
     }
+}
+
+/*
+ * Data production method
+ */
+use crate::prelude::RinexWriter;
+use std::io::Write;
+
+pub(crate) fn write_record<W: Write>(
+    rec: &Record,
+    head: &Header,
+    w: &mut RinexWriter<W>,
+) -> Result<usize, std::io::Error> {
+    let mut total: usize = 0;
+    for (epoch, observations) in rec.iter() {
+        w.write(fmt_epoch(epoch, observations, head).as_bytes())?;
+    }
+    Ok(total)
 }
