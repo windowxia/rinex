@@ -345,9 +345,9 @@ pub fn main() -> Result<(), Error> {
             .expect("failed to generate merged file");
 
         // generate new file
-        new_rinex
-            .to_file(path)
-            .expect("failed to generate merged file");
+        //new_rinex
+        //    .to_file(path)
+        //    .expect("failed to generate merged file");
 
         info!("\"{}\" has been generated", &path);
         return Ok(());
@@ -374,9 +374,9 @@ pub fn main() -> Result<(), Error> {
             file_suffix
         );
 
-        rnx_a
-            .to_file(&path)
-            .unwrap_or_else(|_| panic!("failed to generate splitted file \"{}\"", path));
+        //rnx_a
+        //    .to_file(&path)
+        //    .unwrap_or_else(|_| panic!("failed to generate splitted file \"{}\"", path));
 
         let file_suffix = rnx_b
             .first_epoch()
@@ -390,9 +390,9 @@ pub fn main() -> Result<(), Error> {
             file_suffix
         );
 
-        rnx_b
-            .to_file(&path)
-            .unwrap_or_else(|_| panic!("failed to generate splitted file \"{}\"", path));
+        //rnx_b
+        //    .to_file(&path)
+        //    .unwrap_or_else(|_| panic!("failed to generate splitted file \"{}\"", path));
 
         // [*] stop here, special mode: no further analysis allowed
         return Ok(());

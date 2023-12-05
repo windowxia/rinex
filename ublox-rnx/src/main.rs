@@ -240,7 +240,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     /*
      * Initialize a header
      */
-    output.write(obsrinex)?;
+    // output.write(obsrinex)?;
 
     // main loop
     loop {

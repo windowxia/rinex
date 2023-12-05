@@ -3,68 +3,53 @@
 #[cfg(feature = "flate2")]
 use flate2::{write::GzEncoder, Compression};
 use std::fs::File;
-use std::io::BufWriter; // Seek, SeekFrom};
+use std::io::{Write, BufWriter};
 
 #[derive(Debug)]
-pub enum WriterWrapper {
-    /// Readable `RINEX`
-    PlainFile(BufWriter<File>),
-    /// gzip compressed RINEX
+pub enum RinexWriter<W: Write> {
+    /// Readable RINEX
+    PlainRinex(BufWriter<W>),
     #[cfg(feature = "flate2")]
-    GzFile(BufWriter<GzEncoder<File>>),
+    /// Gzip compressed RINEX
+    GzipRinex(BufWriter<GzEncoder<W>>),
 }
 
-pub struct BufferedWriter {
-    /// internal writer,
-    writer: WriterWrapper,
-}
-
-impl BufferedWriter {
-    /// Opens given file for efficient buffered write operation
-    /// with possible .gz compression
-    pub fn new(path: &str) -> std::io::Result<Self> {
-        let f = std::fs::File::create(path)?;
-        if path.ends_with(".gz") {
-            // --> .gz compression
-            #[cfg(feature = "flate2")]
-            {
-                // .gz
-                // example : i.gz, .n.gz, .crx.gz
-                Ok(Self {
-                    writer: WriterWrapper::GzFile(
-                        // compression lvl 6 seems to be the optimal standard
-                        BufWriter::new(GzEncoder::new(f, Compression::new(6))),
-                    ),
-                })
-            }
-            #[cfg(not(feature = "flate2"))]
-            {
-                panic!(".gz data requires --flate2 feature")
-            }
-        } else if path.ends_with(".Z") {
-            panic!(".z compression is not supported yet, compress manually")
-        } else {
-            // Assumes no extra compression
-            Ok(Self {
-                writer: WriterWrapper::PlainFile(BufWriter::new(f)),
-            })
-        }
+impl<W: Write> RinexWriter<W> {
+    /// Creates a new RinexWriter for RINEX from an input that implements [`Write`]
+    pub fn new(w: W) -> Self {
+        Self::PlainRinex(BufWriter::new(w))
+    }
+    /// Creates a new RinexWriter with seamless gzip compression,
+    /// from a input that implements [`Write`]
+    #[cfg(feature = "flate2")]
+    #[cfg_attr(docrs, doc(cfg(feature = "flate2")))]
+    pub fn new_gzip(w: W, compression_lvl: u32) -> Self {
+            Self::GzipRinex(
+                BufWriter::new(
+                    GzEncoder::new(w, Compression::new(compression_lvl))))
     }
 }
 
-impl std::io::Write for BufferedWriter {
+impl<W: Write> Write for RinexWriter<W> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
-        match self.writer {
-            WriterWrapper::PlainFile(ref mut writer) => writer.write(buf),
+        match self {
+            Self::PlainRinex(ref mut writer) => writer.write(buf),
             #[cfg(feature = "flate2")]
-            WriterWrapper::GzFile(ref mut writer) => writer.write(buf),
+            Self::GzipRinex(ref mut writer) => writer.write(buf),
+        }
+    }
+    fn write_all(&mut self, buf: &[u8]) -> Result<(), std::io::Error> {
+        match self {
+            Self::PlainRinex(ref mut writer) => writer.write_all(buf),
+            #[cfg(feature = "flate2")]
+            Self::GzipRinex(ref mut writer) => writer.write_all(buf),
         }
     }
     fn flush(&mut self) -> Result<(), std::io::Error> {
-        match self.writer {
-            WriterWrapper::PlainFile(ref mut writer) => writer.flush(),
+        match self {
+            Self::PlainRinex(ref mut writer) => writer.flush(),
             #[cfg(feature = "flate2")]
-            WriterWrapper::GzFile(ref mut writer) => writer.flush(),
+            Self::GzipRinex(ref mut writer) => writer.flush(),
         }
     }
 }

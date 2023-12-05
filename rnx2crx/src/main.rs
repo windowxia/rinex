@@ -64,7 +64,7 @@ fn main() -> Result<(), Error> {
             }
         },
     };
-    rinex.to_file(&output_path)?;
+    //rinex.to_file(&output_path)?;
     println!("{} generated", output_path);
     Ok(())
 }

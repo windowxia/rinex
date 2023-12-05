@@ -16,7 +16,7 @@ use super::{
     split,
     split::Split,
     types::Type,
-    writer::BufferedWriter,
+    writer::RinexWriter,
     *,
 };
 use hifitime::Duration;
@@ -128,101 +128,101 @@ impl Record {
             _ => None,
         }
     }
-    /// Streams into given file writer
-    pub fn to_file(
-        &self,
-        header: &header::Header,
-        writer: &mut BufferedWriter,
-    ) -> Result<(), Error> {
-        match &header.rinex_type {
-            Type::MeteoData => {
-                let record = self.as_meteo().unwrap();
-                for (epoch, data) in record.iter() {
-                    if let Ok(epoch) = meteo::record::fmt_epoch(epoch, data, header) {
-                        let _ = write!(writer, "{}", epoch);
-                    }
-                }
-            },
-            Type::ObservationData => {
-                let record = self.as_obs().unwrap();
-                let obs_fields = &header.obs.as_ref().unwrap();
-                let mut compressor = Compressor::default();
-                for ((epoch, flag), (clock_offset, data)) in record.iter() {
-                    let epoch =
-                        observation::record::fmt_epoch(*epoch, *flag, clock_offset, data, header);
-                    if obs_fields.crinex.is_some() {
-                        let major = header.version.major;
-                        let constell = &header.constellation.as_ref().unwrap();
-                        for line in epoch.lines() {
-                            let line = line.to_owned() + "\n"; // helps the following .lines() iterator
-                                                               // embedded in compression method
-                            if let Ok(compressed) =
-                                compressor.compress(major, &obs_fields.codes, constell, &line)
-                            {
-                                write!(writer, "{}", compressed)?;
-                            }
-                        }
-                    } else {
-                        write!(writer, "{}", epoch)?;
-                    }
-                }
-            },
-            Type::NavigationData => {
-                let record = self.as_nav().unwrap();
-                for (epoch, frames) in record.iter() {
-                    if let Ok(epoch) = navigation::record::fmt_epoch(epoch, frames, header) {
-                        let _ = write!(writer, "{}", epoch);
-                    }
-                }
-            },
-            Type::ClockData => {
-                if let Some(r) = self.as_clock() {
-                    for (epoch, data) in r {
-                        if let Ok(epoch) = clocks::record::fmt_epoch(epoch, data) {
-                            let _ = write!(writer, "{}", epoch);
-                        }
-                    }
-                }
-            },
-            Type::IonosphereMaps => {
-                if let Some(_r) = self.as_ionex() {
-                    //for (index, (epoch, (_map, _, _))) in r.iter().enumerate() {
-                    //    let _ = write!(writer, "{:6}                                                      START OF TEC MAP", index);
-                    //    let _ = write!(
-                    //        writer,
-                    //        "{}                        EPOCH OF CURRENT MAP",
-                    //        epoch::format(*epoch, None, Type::IonosphereMaps, 1)
-                    //    );
-                    //    let _ = write!(writer, "{:6}                                                      END OF TEC MAP", index);
-                    //}
-                    // /*
-                    //  * not efficient browsing, but matches provided examples and common formatting.
-                    //  * RMS and Height maps are passed after TEC maps.
-                    //  */
-                    //for (index, (epoch, (_, _map, _))) in r.iter().enumerate() {
-                    //    let _ = write!(writer, "{:6}                                                      START OF RMS MAP", index);
-                    //    let _ = write!(
-                    //        writer,
-                    //        "{}                        EPOCH OF CURRENT MAP",
-                    //        epoch::format(*epoch, None, Type::IonosphereMaps, 1)
-                    //    );
-                    //    let _ = write!(writer, "{:6}                                                      END OF RMS MAP", index);
-                    //}
-                    //for (index, (epoch, (_, _, _map))) in r.iter().enumerate() {
-                    //    let _ = write!(writer, "{:6}                                                      START OF HEIGHT MAP", index);
-                    //    let _ = write!(
-                    //        writer,
-                    //        "{}                        EPOCH OF CURRENT MAP",
-                    //        epoch::format(*epoch, None, Type::IonosphereMaps, 1)
-                    //    );
-                    //    let _ = write!(writer, "{:6}                                                      END OF HEIGHT MAP", index);
-                    //}
-                }
-            },
-            _ => panic!("record type not supported yet"),
-        }
-        Ok(())
-    }
+    /* Writes self into an interface that implements [`Write`] */
+    //fn write(
+    //    &self,
+    //    header: &header::Header,
+    //    writer: &mut BufferedWriter,
+    //) -> Result<(), Error> {
+    //    match &header.rinex_type {
+    //        Type::MeteoData => {
+    //            let record = self.as_meteo().unwrap();
+    //            for (epoch, data) in record.iter() {
+    //                if let Ok(epoch) = meteo::record::fmt_epoch(epoch, data, header) {
+    //                    let _ = write!(writer, "{}", epoch);
+    //                }
+    //            }
+    //        },
+    //        Type::ObservationData => {
+    //            let record = self.as_obs().unwrap();
+    //            let obs_fields = &header.obs.as_ref().unwrap();
+    //            let mut compressor = Compressor::default();
+    //            for ((epoch, flag), (clock_offset, data)) in record.iter() {
+    //                let epoch =
+    //                    observation::record::fmt_epoch(*epoch, *flag, clock_offset, data, header);
+    //                if obs_fields.crinex.is_some() {
+    //                    let major = header.version.major;
+    //                    let constell = &header.constellation.as_ref().unwrap();
+    //                    for line in epoch.lines() {
+    //                        let line = line.to_owned() + "\n"; // helps the following .lines() iterator
+    //                                                           // embedded in compression method
+    //                        if let Ok(compressed) =
+    //                            compressor.compress(major, &obs_fields.codes, constell, &line)
+    //                        {
+    //                            write!(writer, "{}", compressed)?;
+    //                        }
+    //                    }
+    //                } else {
+    //                    write!(writer, "{}", epoch)?;
+    //                }
+    //            }
+    //        },
+    //        Type::NavigationData => {
+    //            let record = self.as_nav().unwrap();
+    //            for (epoch, frames) in record.iter() {
+    //                if let Ok(epoch) = navigation::record::fmt_epoch(epoch, frames, header) {
+    //                    let _ = write!(writer, "{}", epoch);
+    //                }
+    //            }
+    //        },
+    //        Type::ClockData => {
+    //            if let Some(r) = self.as_clock() {
+    //                for (epoch, data) in r {
+    //                    if let Ok(epoch) = clocks::record::fmt_epoch(epoch, data) {
+    //                        let _ = write!(writer, "{}", epoch);
+    //                    }
+    //                }
+    //            }
+    //        },
+    //        Type::IonosphereMaps => {
+    //            if let Some(_r) = self.as_ionex() {
+    //                //for (index, (epoch, (_map, _, _))) in r.iter().enumerate() {
+    //                //    let _ = write!(writer, "{:6}                                                      START OF TEC MAP", index);
+    //                //    let _ = write!(
+    //                //        writer,
+    //                //        "{}                        EPOCH OF CURRENT MAP",
+    //                //        epoch::format(*epoch, None, Type::IonosphereMaps, 1)
+    //                //    );
+    //                //    let _ = write!(writer, "{:6}                                                      END OF TEC MAP", index);
+    //                //}
+    //                // /*
+    //                //  * not efficient browsing, but matches provided examples and common formatting.
+    //                //  * RMS and Height maps are passed after TEC maps.
+    //                //  */
+    //                //for (index, (epoch, (_, _map, _))) in r.iter().enumerate() {
+    //                //    let _ = write!(writer, "{:6}                                                      START OF RMS MAP", index);
+    //                //    let _ = write!(
+    //                //        writer,
+    //                //        "{}                        EPOCH OF CURRENT MAP",
+    //                //        epoch::format(*epoch, None, Type::IonosphereMaps, 1)
+    //                //    );
+    //                //    let _ = write!(writer, "{:6}                                                      END OF RMS MAP", index);
+    //                //}
+    //                //for (index, (epoch, (_, _, _map))) in r.iter().enumerate() {
+    //                //    let _ = write!(writer, "{:6}                                                      START OF HEIGHT MAP", index);
+    //                //    let _ = write!(
+    //                //        writer,
+    //                //        "{}                        EPOCH OF CURRENT MAP",
+    //                //        epoch::format(*epoch, None, Type::IonosphereMaps, 1)
+    //                //    );
+    //                //    let _ = write!(writer, "{:6}                                                      END OF HEIGHT MAP", index);
+    //                //}
+    //            }
+    //        },
+    //        _ => panic!("record type not supported yet"),
+    //    }
+    //    Ok(())
+    //}
 }
 
 impl Default for Record {

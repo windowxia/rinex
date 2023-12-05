@@ -1,7 +1,8 @@
+use std::path::{Path, PathBuf};
+use rinex::prelude::{RinexWriter, Rinex};
+
 mod cli;
 use cli::Cli;
-use rinex::*;
-use std::path::{Path, PathBuf};
 
 fn workspace(cli: &Cli) -> PathBuf {
     if let Some(workspace) = cli.workspace() {
@@ -71,7 +72,6 @@ fn main() -> Result<(), rinex::Error> {
     println!("decompressing \"{}\"..", input_name);
 
     let workspace_path = workspace(&cli).join(&input_name);
-
     create_workspace(&workspace_path);
 
     let output_name = match cli.output_name() {
@@ -85,8 +85,15 @@ fn main() -> Result<(), rinex::Error> {
     rinex.crnx2rnx_mut(); // convert to RINEX
 
     let outputpath = format!("{}/{}", workspace_path.to_string_lossy(), output_name);
+    let fd = std::fs::File::create(outputpath.clone())?;
 
-    rinex.to_file(&outputpath)?; // dump
+    let mut writer = match cli.gzip() {
+        false => RinexWriter::new(fd),
+        true => RinexWriter::new_gzip(fd, 6),
+    };
+
+    rinex.write(&mut writer)?;
+    
     println!("\"{}\" generated", outputpath.clone());
     Ok(())
 }

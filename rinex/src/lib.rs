@@ -23,10 +23,11 @@ pub mod split;
 pub mod types;
 pub mod version;
 
+mod leap;
+mod writer;
+mod observable;
 mod bibliography;
 mod ground_position;
-mod leap;
-mod observable;
 
 #[cfg(test)]
 mod tests;
@@ -45,9 +46,6 @@ extern crate lazy_static;
 pub mod reader;
 use reader::BufferedReader;
 use std::io::Write; //, Read};
-
-pub mod writer;
-use writer::BufferedWriter;
 
 use std::collections::{BTreeMap, HashMap};
 use thiserror::Error;
@@ -68,6 +66,7 @@ pub mod prelude {
     pub use crate::observable::Observable;
     pub use crate::types::Type as RinexType;
     pub use crate::version::Version as RinexVersion;
+    pub use crate::writer::RinexWriter;
     pub use crate::Rinex;
     pub use gnss::prelude::Constellation;
     pub use gnss::prelude::SV;
@@ -1058,15 +1057,6 @@ impl Rinex {
             });
             !dtypes.is_empty()
         })
-    }
-    /// Writes self into given file.   
-    /// Both header + record will strictly follow RINEX standards.   
-    /// Record: refer to supported RINEX types
-    pub fn to_file(&self, path: &str) -> Result<(), Error> {
-        let mut writer = BufferedWriter::new(path)?;
-        write!(writer, "{}", self.header)?;
-        self.record.to_file(&self.header, &mut writer)?;
-        Ok(())
     }
 }
 
@@ -3290,3 +3280,13 @@ mod test {
         }
     }
 }
+
+/*
+ * RINEX production methods
+ */
+impl Rinex {
+    pub fn write<W: Write>(&self, w: &mut RinexWriter<W>) -> Result<usize, std::io::Error> {
+        self.header.write(w)
+    }
+}
+
