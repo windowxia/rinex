@@ -152,7 +152,7 @@ mod test {
             rnx.crnx2rnx_mut();
             // write to file
             let filename = random_name(8);
-            let fd = File::create(filename).unwrap();
+            let fd = File::create(&filename).unwrap();
             let mut writer = RinexWriter::new(fd);
             assert!(
                 rnx.write(&mut writer).is_ok(),
@@ -174,7 +174,7 @@ mod test {
             // test_toolkit::test_against_model(&rnx, &model, &path);
 
             // remove copy
-            let _ = std::fs::remove_file(&path);
+            let _ = std::fs::remove_file(&filename);
         }
     }
     #[test]

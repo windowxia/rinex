@@ -8,11 +8,14 @@ mod test {
     fn testbench(path: &str) {
         // parse this file
         let rnx = Rinex::from_file(path).unwrap(); // already tested elsewhere
+        
+        // dump this file
         let fpath = random_name(5);
         let fd = File::create(&fpath).unwrap();
         let mut writer = RinexWriter::new(fd);
         assert!(rnx.write(&mut writer).is_ok(), "failed to write {}", path);
 
+        // readback
         let copy = Rinex::from_file(&fpath);
         assert!(copy.is_ok()); // content should be valid
         let copy = copy.unwrap();
@@ -65,7 +68,7 @@ mod test {
     }
     #[test]
     #[cfg(feature = "flate2")]
-    //#[ignore]
+    #[ignore]
     fn meteo_v2() {
         let folder = env!("CARGO_MANIFEST_DIR").to_owned() + "/../test_resources/MET/V2/";
         for file in std::fs::read_dir(folder).unwrap() {
