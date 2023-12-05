@@ -3287,6 +3287,7 @@ use crate::prelude::RinexWriter;
 use crate::record::Record;
 use crate::{
     meteo::record::write_record as write_meteo_record,
+    navigation::record::write_record as write_nav_record,
     observation::record::write_record as write_obs_record,
 };
 use std::io::Write;
@@ -3302,10 +3303,10 @@ impl Rinex {
             Record::ObsRecord(rec) => {
                 write_obs_record(rec, self.header.is_crinex(), &self.header, w)
             },
+            Record::NavRecord(rec) => write_nav_record(rec, &self.header, w),
             Record::AntexRecord(rec) => panic!("not supported yet"),
             Record::ClockRecord(rec) => panic!("not supported yet"),
             Record::IonexRecord(rec) => panic!("not supported yet"),
-            Record::NavRecord(rec) => panic!("not supported yet"),
         }
     }
 }

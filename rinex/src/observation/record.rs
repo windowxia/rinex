@@ -1801,7 +1801,7 @@ pub(crate) fn code_multipath(
 use crate::prelude::RinexWriter;
 use std::io::Write;
 
-pub(crate) fn write_record<W: Write>(
+pub fn write_record<W: Write>(
     rec: &Record,
     crinex_compress: bool,
     head: &Header,

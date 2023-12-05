@@ -362,11 +362,7 @@ fn fmt_rework(major: u8, lines: &str) -> String {
 /*
  * Writes given epoch into stream
  */
-pub(crate) fn fmt_epoch(
-    epoch: &Epoch,
-    data: &Vec<NavFrame>,
-    header: &Header,
-) -> Result<String, Error> {
+pub(crate) fn fmt_epoch(epoch: &Epoch, data: &NavFrame, header: &Header) -> String {
     if header.version.major < 4 {
         fmt_epoch_v2v3(epoch, data, header)
     } else {
@@ -374,168 +370,162 @@ pub(crate) fn fmt_epoch(
     }
 }
 
-fn fmt_epoch_v2v3(epoch: &Epoch, data: &Vec<NavFrame>, header: &Header) -> Result<String, Error> {
+fn fmt_epoch_v2v3(epoch: &Epoch, frame: &NavFrame, header: &Header) -> String {
     let mut lines = String::with_capacity(128);
-    for fr in data.iter() {
-        if let Some(fr) = fr.as_eph() {
-            let (_, sv, ephemeris) = fr;
-            match &header.constellation {
-                Some(Constellation::Mixed) => {
-                    // Mixed constellation context
-                    // we need to fully describe the vehicle
-                    lines.push_str(&format!("{} ", sv));
-                },
-                Some(_) => {
-                    // Unique constellation context:
-                    // in V2 format, only PRN is shown
-                    lines.push_str(&format!("{:2} ", sv.prn));
-                },
-                None => {
-                    panic!("can't generate data without predefined constellations");
-                },
-            }
-            lines.push_str(&format!(
-                "{} ",
-                epoch::format(*epoch, None, Type::NavigationData, header.version.major)
-            ));
-            lines.push_str(&format!(
-                "{:14.11E} {:14.11E} {:14.11E}\n   ",
-                ephemeris.clock_bias, ephemeris.clock_drift, ephemeris.clock_drift_rate
-            ));
-            if header.version.major == 3 {
-                lines.push_str("  ");
-            }
+    if let Some(fr) = frame.as_eph() {
+        let (_, sv, ephemeris) = fr;
+        match &header.constellation {
+            Some(Constellation::Mixed) => {
+                // Mixed constellation context
+                // we need to fully describe the vehicle
+                lines.push_str(&format!("{} ", sv));
+            },
+            Some(_) => {
+                // Unique constellation context:
+                // in V2 format, only PRN is shown
+                lines.push_str(&format!("{:2} ", sv.prn));
+            },
+            None => {
+                panic!("can't generate data without predefined constellations");
+            },
+        }
+        lines.push_str(&format!(
+            "{} ",
+            epoch::format(*epoch, None, Type::NavigationData, header.version.major)
+        ));
+        lines.push_str(&format!(
+            "{:14.11E} {:14.11E} {:14.11E}\n   ",
+            ephemeris.clock_bias, ephemeris.clock_drift, ephemeris.clock_drift_rate
+        ));
+        if header.version.major == 3 {
+            lines.push_str("  ");
+        }
 
-            // locate closest standards in DB
-            let closest_orbits_definition =
-                match closest_nav_standards(sv.constellation, header.version, NavMsgType::LNAV) {
-                    Some(v) => v,
-                    _ => return Err(Error::OrbitRevision),
-                };
+        // locate closest standards in DB
+        let closest_orbits_definition =
+            match closest_nav_standards(sv.constellation, header.version, NavMsgType::LNAV) {
+                Some(v) => v,
+                _ => panic!("orbit revision"),
+            };
 
-            let nb_items_per_line = 4;
-            let mut chunks = closest_orbits_definition
-                .items
-                .chunks_exact(nb_items_per_line)
-                .peekable();
+        let nb_items_per_line = 4;
+        let mut chunks = closest_orbits_definition
+            .items
+            .chunks_exact(nb_items_per_line)
+            .peekable();
 
-            while let Some(chunk) = chunks.next() {
-                if chunks.peek().is_some() {
-                    for (key, _) in chunk {
-                        if let Some(data) = ephemeris.orbits.get(*key) {
-                            lines.push_str(&format!("{} ", data.to_string()));
-                        } else {
-                            lines.push_str("                   ");
-                        }
+        while let Some(chunk) = chunks.next() {
+            if chunks.peek().is_some() {
+                for (key, _) in chunk {
+                    if let Some(data) = ephemeris.orbits.get(*key) {
+                        lines.push_str(&format!("{} ", data.to_string()));
+                    } else {
+                        lines.push_str("                   ");
                     }
-                    lines.push_str("\n     ");
-                } else {
-                    // last row
-                    for (key, _) in chunk {
-                        if let Some(data) = ephemeris.orbits.get(*key) {
-                            lines.push_str(&data.to_string());
-                        } else {
-                            lines.push_str("                   ");
-                        }
-                    }
-                    lines.push('\n');
                 }
+                lines.push_str("\n     ");
+            } else {
+                // last row
+                for (key, _) in chunk {
+                    if let Some(data) = ephemeris.orbits.get(*key) {
+                        lines.push_str(&data.to_string());
+                    } else {
+                        lines.push_str("                   ");
+                    }
+                }
+                lines.push('\n');
             }
         }
     }
-    lines = fmt_rework(header.version.major, &lines);
-    Ok(lines)
+    fmt_rework(header.version.major, &lines)
 }
 
-fn fmt_epoch_v4(epoch: &Epoch, data: &Vec<NavFrame>, header: &Header) -> Result<String, Error> {
+fn fmt_epoch_v4(epoch: &Epoch, frame: &NavFrame, header: &Header) -> String {
     let mut lines = String::with_capacity(128);
-    for fr in data.iter() {
-        if let Some(fr) = fr.as_eph() {
-            let (msgtype, sv, ephemeris) = fr;
-            lines.push_str(&format!("> {} {} {}\n", FrameClass::Ephemeris, sv, msgtype));
-            match &header.constellation {
-                Some(Constellation::Mixed) => {
-                    // Mixed constellation context
-                    // we need to fully describe the vehicle
-                    lines.push_str(&sv.to_string());
-                    lines.push(' ');
-                },
-                Some(_) => {
-                    // Unique constellation context:
-                    // in V2 format, only PRN is shown
-                    lines.push_str(&format!("{:02} ", sv.prn));
-                },
-                None => panic!("producing data with no constellation previously defined"),
-            }
-            lines.push_str(&format!(
-                "{} ",
-                epoch::format(*epoch, None, Type::NavigationData, header.version.major)
-            ));
-            lines.push_str(&format!(
-                "{:14.13E} {:14.13E} {:14.13E}\n",
-                ephemeris.clock_bias, ephemeris.clock_drift, ephemeris.clock_drift_rate
-            ));
-
-            // locate closest revision in DB
-            let closest_orbits_definition =
-                match closest_nav_standards(sv.constellation, header.version, NavMsgType::LNAV) {
-                    Some(v) => v,
-                    _ => return Err(Error::OrbitRevision),
-                };
-
-            let mut index = 0;
-            for (key, _) in closest_orbits_definition.items.iter() {
-                index += 1;
-                if let Some(data) = ephemeris.orbits.get(*key) {
-                    lines.push_str(&format!(" {}", data.to_string()));
-                } else {
-                    // data is missing: either not parsed or not provided
-                    lines.push_str("              ");
-                }
-                if (index % 4) == 0 {
-                    lines.push_str("\n   "); //TODO: do not TAB when writing last line of grouping
-                }
-            }
-        } else if let Some(fr) = fr.as_sto() {
-            let (msg, sv, sto) = fr;
-            lines.push_str(&format!(
-                "> {} {} {}\n",
-                FrameClass::SystemTimeOffset,
-                sv,
-                msg
-            ));
-            lines.push_str(&format!(
-                "    {} {}    {}\n",
-                epoch::format(*epoch, None, Type::NavigationData, header.version.major),
-                sto.system,
-                sto.utc
-            ));
-            lines.push_str(&format!(
-                "   {:14.13E} {:14.13E} {:14.13E} {:14.13E}\n",
-                sto.t_tm as f64, sto.a.0, sto.a.1, sto.a.2
-            ));
-        } else if let Some(_fr) = fr.as_eop() {
-            todo!("NAV V4: EOP: we have no example as of today");
-            //(x, xr, xrr), (y, yr, yrr), t_tm, (dut, dutr, dutrr)) = frame.as_eop()
+    if let Some(fr) = frame.as_eph() {
+        let (msgtype, sv, ephemeris) = fr;
+        lines.push_str(&format!("> {} {} {}\n", FrameClass::Ephemeris, sv, msgtype));
+        match &header.constellation {
+            Some(Constellation::Mixed) => {
+                // Mixed constellation context
+                // we need to fully describe the vehicle
+                lines.push_str(&sv.to_string());
+                lines.push(' ');
+            },
+            Some(_) => {
+                // Unique constellation context:
+                // in V2 format, only PRN is shown
+                lines.push_str(&format!("{:02} ", sv.prn));
+            },
+            None => panic!("producing data with no constellation previously defined"),
         }
-        // EOP
-        else if let Some(fr) = fr.as_ion() {
-            let (msg, sv, ion) = fr;
-            lines.push_str(&format!(
-                "> {} {} {}\n",
-                FrameClass::EarthOrientation,
-                sv,
-                msg
-            ));
-            match ion {
-                IonMessage::KlobucharModel(_model) => todo!("ION:Kb"),
-                IonMessage::NequickGModel(_model) => todo!("ION:Ng"),
-                IonMessage::BdgimModel(_model) => todo!("ION:Bd"),
+        lines.push_str(&format!(
+            "{} ",
+            epoch::format(*epoch, None, Type::NavigationData, header.version.major)
+        ));
+        lines.push_str(&format!(
+            "{:14.13E} {:14.13E} {:14.13E}\n",
+            ephemeris.clock_bias, ephemeris.clock_drift, ephemeris.clock_drift_rate
+        ));
+
+        // locate closest revision in DB
+        let closest_orbits_definition =
+            match closest_nav_standards(sv.constellation, header.version, NavMsgType::LNAV) {
+                Some(v) => v,
+                _ => panic!("orbit revision"),
+            };
+
+        let mut index = 0;
+        for (key, _) in closest_orbits_definition.items.iter() {
+            index += 1;
+            if let Some(data) = ephemeris.orbits.get(*key) {
+                lines.push_str(&format!(" {}", data.to_string()));
+            } else {
+                // data is missing: either not parsed or not provided
+                lines.push_str("              ");
             }
-        } // ION
+            if (index % 4) == 0 {
+                lines.push_str("\n   "); //TODO: do not TAB when writing last line of grouping
+            }
+        }
+    } else if let Some(fr) = frame.as_sto() {
+        let (msg, sv, sto) = fr;
+        lines.push_str(&format!(
+            "> {} {} {}\n",
+            FrameClass::SystemTimeOffset,
+            sv,
+            msg
+        ));
+        lines.push_str(&format!(
+            "    {} {}    {}\n",
+            epoch::format(*epoch, None, Type::NavigationData, header.version.major),
+            sto.system,
+            sto.utc
+        ));
+        lines.push_str(&format!(
+            "   {:14.13E} {:14.13E} {:14.13E} {:14.13E}\n",
+            sto.t_tm as f64, sto.a.0, sto.a.1, sto.a.2
+        ));
+    } else if let Some(_fr) = frame.as_eop() {
+        todo!("NAV V4: EOP: we have no example as of today");
+        //(x, xr, xrr), (y, yr, yrr), t_tm, (dut, dutr, dutrr)) = frame.as_eop()
     }
-    lines = fmt_rework(4, &lines);
-    Ok(lines)
+    // EOP
+    else if let Some(fr) = frame.as_ion() {
+        let (msg, sv, ion) = fr;
+        lines.push_str(&format!(
+            "> {} {} {}\n",
+            FrameClass::EarthOrientation,
+            sv,
+            msg
+        ));
+        match ion {
+            IonMessage::KlobucharModel(_model) => todo!("ION:Kb"),
+            IonMessage::NequickGModel(_model) => todo!("ION:Ng"),
+            IonMessage::BdgimModel(_model) => todo!("ION:Bd"),
+        }
+    } // ION
+    fmt_rework(4, &lines)
 }
 
 #[cfg(test)]
@@ -1789,4 +1779,24 @@ impl Decimate for Record {
         s.decimate_match_mut(rhs);
         s
     }
+}
+
+/*
+ * Data production method
+ */
+use crate::prelude::RinexWriter;
+use std::io::Write;
+
+pub fn write_record<W: Write>(
+    rec: &Record,
+    head: &Header,
+    w: &mut RinexWriter<W>,
+) -> Result<usize, std::io::Error> {
+    let mut total: usize = 0;
+    for (epoch, frames) in rec.iter() {
+        for fr in frames {
+            w.write(fmt_epoch(epoch, fr, head).as_bytes())?;
+        }
+    }
+    Ok(total)
 }
