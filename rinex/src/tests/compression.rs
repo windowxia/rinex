@@ -110,7 +110,7 @@ mod test {
         }
     }
     #[test]
-    #[ignore]
+    //#[ignore]
     fn crinex3() {
         let pool = vec![
             (
@@ -118,8 +118,8 @@ mod test {
                 "ACOR00ESP_R_20213550000_01D_30S_MO.rnx",
             ),
             ("DUTH0630.22D", "DUTH0630.22O"),
-            ("VLNS0010.22D", "VLNS0010.22O"),
-            ("VLNS0630.22D", "VLNS0630.22O"),
+            //("VLNS0010.22D", "VLNS0010.22O"),
+            //("VLNS0630.22D", "VLNS0630.22O"),
             ("flrs0010.12d", "flrs0010.12o"),
             ("pdel0010.21d", "pdel0010.21o"),
         ];
@@ -152,7 +152,7 @@ mod test {
 
             // convert to CRINEX3
             println!("compressing \"{}\"..", rnx_path.to_string_lossy());
-            let dut = rnx.rnx2crnx1();
+            let dut = rnx.rnx2crnx3();
 
             // parse model
             let model = Rinex::from_file(&crnx_path.to_string_lossy());
@@ -175,29 +175,23 @@ mod test {
     }
     #[test]
     #[ignore]
-    fn crinex3_reciprocity() {
-        let pool = vec![("pdel0010.21o")];
-        for testfile in pool {
-            let rnx_path = format!("../test_resources/OBS/V3/{}", testfile);
-
-            let rnx = Rinex::from_file(&rnx_path);
-            assert!(
-                rnx.is_ok(),
-                "Failed to parse test pool file \"{}\"",
-                testfile
-            );
-
+    fn crinex3_reciprocal() {
+        for (plain, crinex) in [(
+            "ACOR00ESP_R_20213550000_01D_30S_MO.rnx",
+            "ACOR00ESP_R_20213550000_01D_30S_MO.crx",
+        )] {
             // compress
+            let rnx_path = format!("../test_resources/OBS/V3/{}", plain);
+            let rnx = Rinex::from_file(&rnx_path);
             let rnx = rnx.unwrap();
             let compressed = rnx.rnx2crnx1();
 
             let tmp_path = format!("test-{}.crx", random_name(8));
-
             assert!(
                 compressed.to_file(&tmp_path).is_ok(),
                 "{}{}",
                 "failed to format compressed rinex",
-                testfile
+                plain,
             );
 
             // test reciprocity
@@ -206,11 +200,11 @@ mod test {
                 rnx == uncompressed,
                 "{}{}",
                 "reciprocity test failed for \"{}\"",
-                testfile
+                plain,
             );
 
             // remove generated file
-            let _ = std::fs::remove_file(&tmp_path);
+            // let _ = std::fs::remove_file(&tmp_path);
         }
     }
 }

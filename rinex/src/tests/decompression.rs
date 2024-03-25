@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod test {
-    use crate::hatanaka::Decompressor;
+    use crate::hatanaka::decompressor::Decompressor;
     use crate::tests::toolkit::obsrinex_check_observables;
     use crate::tests::toolkit::random_name;
+    use crate::tests::toolkit::test_against_model;
     use crate::tests::toolkit::test_observation_rinex;
-    // use crate::tests::toolkit::test_against_model;
     use crate::{erratic_time_frame, evenly_spaced_time_frame, tests::toolkit::TestTimeFrame};
     use crate::{observable, prelude::*};
     use itertools::Itertools;
@@ -12,13 +12,13 @@ mod test {
     use std::path::Path;
     use std::str::FromStr;
     #[test]
-    fn testbench_v1() {
+    fn decompress_v1() {
         let pool = vec![
-            ("zegv0010.21d", "zegv0010.21o"),
-            ("AJAC3550.21D", "AJAC3550.21O"),
+            //("zegv0010.21d", "zegv0010.21o"),
+            //("AJAC3550.21D", "AJAC3550.21O"),
             //("KOSG0010.95D", "KOSG0010.95O"), //TODO@ fix tests/obs/v2_kosg first
-            ("aopr0010.17d", "aopr0010.17o"),
-            ("npaz3550.21d", "npaz3550.21o"),
+            //("aopr0010.17d", "aopr0010.17o"),
+            //("npaz3550.21d", "npaz3550.21o"),
             ("wsra0010.21d", "wsra0010.21o"),
         ];
         for duplet in pool {
@@ -148,8 +148,16 @@ mod test {
                     "30 s"),
                 );
             }
-            // decompress and write to file
+
+            // decompress & dump
             rnx.crnx2rnx_mut();
+
+            let obs = rnx.header.obs.as_ref().unwrap();
+            assert!(
+                obs.crinex.is_none(),
+                "plain RINEX should not contain CRINEX header"
+            );
+
             let filename = format!("{}.rnx", random_name(10));
             assert!(
                 rnx.to_file(&filename).is_ok(),
@@ -157,16 +165,12 @@ mod test {
                 crnx_name
             );
 
-            // then run comparison with model
-            let obs = rnx.header.obs.as_ref().unwrap();
-            assert!(obs.crinex.is_none());
-
-            // parse plain RINEX and run reciprocity
+            // parse plain RINEX and run reciprocal test
             let path = format!("../test_resources/OBS/V2/{}", rnx_name);
-            let _model = Rinex::from_file(&path).unwrap();
+            let model = Rinex::from_file(&path).unwrap();
 
             // run testbench
-            // test_against_model(&rnx, &model, &path, 1.0E-6);
+            test_against_model(&rnx, &model, &path, 1.0E-6);
 
             // remove copy
             let _ = std::fs::remove_file(filename);

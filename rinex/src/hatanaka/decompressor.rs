@@ -257,6 +257,7 @@ impl Decompressor {
 
             // [0] : COMMENTS (special case)
             if is_rinex_comment(line) {
+                //TODO: FIXME
                 //if line.contains("RINEX FILE SPLICE") {
                 // [0*] SPLICE special comments
                 //      merged RINEX Files
@@ -381,7 +382,7 @@ impl Decompressor {
                             result.push_str(&format!("{} ", sv));
                         }
                         /*
-                         * Build compress tools in case this vehicle is new
+                         * Build compression kernel, in case this is a new SV
                          */
                         if self.sv_diff.get(&sv).is_none() {
                             let mut inner: Vec<(NumDiff, TextDiff, TextDiff)> =

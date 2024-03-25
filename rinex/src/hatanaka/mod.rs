@@ -2,12 +2,9 @@
 use thiserror::Error;
 
 pub mod compressor;
+pub mod decompressor;
 pub mod numdiff;
 pub mod textdiff;
-pub use compressor::Compressor;
-
-pub mod decompressor;
-pub use decompressor::Decompressor;
 
 #[derive(Error, Debug)]
 pub enum Error {

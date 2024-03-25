@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 #[derive(Default, PartialEq)]
-pub enum State {
+pub(crate) enum State {
     #[default]
     EpochDescriptor,
     Body,
@@ -20,7 +20,7 @@ impl State {
 }
 
 /// Structure to compress RINEX data
-pub struct Compressor {
+pub(crate) struct Compressor {
     /// finite state machine
     state: State,
     /// True only for first epoch ever processed
@@ -240,6 +240,7 @@ impl Compressor {
                         self.nb_vehicles = self.determine_nb_vehicles(line)?;
                     }
                     self.epoch_ptr += 1;
+                    println!("EPOCH {}", self.epoch_ptr);
                     self.epoch_descriptor.push_str(line);
 
                     //TODO
@@ -254,7 +255,9 @@ impl Compressor {
                     //  otherwise append a BLANK
                     self.epoch_descriptor.push('\n');
 
-                    let nb_lines = num_integer::div_ceil(self.nb_vehicles, 12) as u8;
+                    //let nb_lines = num_integer::div_ceil(self.nb_vehicles, 12) as u8;
+                    let nb_lines = self.nb_vehicles as u8 / 12;
+
                     if self.epoch_ptr == nb_lines {
                         // end of descriptor
                         // format to CRINEX

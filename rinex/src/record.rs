@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use super::{
     antex, clock,
-    hatanaka::{Compressor, Decompressor},
+    hatanaka::{compressor::Compressor, decompressor::Decompressor},
     header, ionex, is_rinex_comment, merge,
     merge::Merge,
     meteo, navigation, observation,
