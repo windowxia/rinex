@@ -1,7 +1,10 @@
-use crate::datetime::{parse_datetime, ParseDateTimeError};
+use thiserror::Error;
+
+use hifitime::Epoch;
+
+use crate::epoch::{parse_epoch, Error as EpochParsingError};
 use crate::header;
 use crate::header::is_valid_header;
-use thiserror::Error;
 
 #[derive(Debug, PartialEq, Clone)]
 /// Describes how the included GNSS
@@ -53,8 +56,8 @@ pub enum Error {
     /// Non recognized file type
     #[error("file type error")]
     FileTypeError(#[from] header::DocumentTypeError),
-    #[error("failed to parse datetime")]
-    ParseDateTimeError(#[from] ParseDateTimeError),
+    #[error("failed to parse epoch")]
+    EpochParsingError(#[from] EpochParsingError),
     #[error("failed to parse `length` field")]
     ParseIntError(#[from] std::num::ParseIntError),
     #[error("failed to parse `bias_mode` field")]
@@ -70,11 +73,11 @@ pub struct Header {
     /// Data provider agency code
     pub data_code: String,
     /// File creation date
-    pub date: chrono::NaiveDateTime,
+    pub date: Epoch,
     /// Start time of solution
-    pub start_time: chrono::NaiveDateTime,
+    pub start_time: Epoch,
     /// End time of solution
-    pub end_time: chrono::NaiveDateTime,
+    pub end_time: Epoch,
     /// Relative or Absolute Bias mode
     pub bias_mode: BiasMode,
     /// Number of bias estimates in this file
@@ -104,10 +107,10 @@ impl std::str::FromStr for Header {
         Ok(Self {
             version: version.trim().to_string(),
             creator_code: file_code.trim().to_string(),
-            date: parse_datetime(creation.trim())?,
+            date: parse_epoch(creation.trim())?,
             data_code: data_code.trim().to_string(),
-            start_time: parse_datetime(start_time.trim())?,
-            end_time: parse_datetime(end_time.trim())?,
+            start_time: parse_epoch(start_time.trim())?,
+            end_time: parse_epoch(end_time.trim())?,
             length,
             bias_mode: BiasMode::from_str(bias_mode.trim())?,
         })
@@ -116,7 +119,7 @@ impl std::str::FromStr for Header {
 
 impl Default for Header {
     fn default() -> Self {
-        let now = chrono::Utc::now().naive_utc();
+        let now = Epoch::now().unwrap_or(Epoch::default());
         Self {
             version: String::from("1.00"),
             creator_code: String::from("Unknown"),

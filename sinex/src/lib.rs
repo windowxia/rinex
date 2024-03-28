@@ -7,10 +7,15 @@ mod description;
 mod reference;
 
 pub mod bias;
-pub mod datetime;
+pub mod epoch;
 pub mod header;
 pub mod receiver;
 //pub mod troposphere;
+
+pub mod prelude {
+    pub use crate::{Error, Sinex};
+    pub use hifitime::{Duration, Epoch, TimeScale};
+}
 
 extern crate gnss_rs as gnss;
 
@@ -19,6 +24,7 @@ use header::{is_valid_header, Header};
 use reference::Reference;
 
 use gnss::constellation::Constellation;
+use hifitime::TimeScale;
 
 fn is_comment(line: &str) -> bool {
     line.starts_with('*')
@@ -49,6 +55,9 @@ pub enum Error {
     /// SINEX file should start with proper header
     #[error("missing header delimiter")]
     MissingHeader,
+    /// Epoch parsing error
+    #[error("failed to parse Epoch")]
+    EpochParsing(#[from] hifitime::Errors),
     /// Failed to parse Header section
     #[error("invalid header content")]
     InvalidHeader,
@@ -68,11 +77,8 @@ pub enum Error {
     #[error("failed to parse bias mode")]
     ParseBiasModeError(#[from] bias::header::BiasModeError),
     /// Failed to parse Determination Method
-    #[error("failed to parse determination method")]
-    ParseMethodError(#[from] bias::DeterminationMethodError),
-    /// Failed to parse time system field
-    #[error("failed to parse time system")]
-    ParseTimeSystemError(#[from] bias::TimeSystemError),
+    #[error("unknown bias determination method \"{0}\"")]
+    UnknownMethod(String),
 }
 
 #[derive(Debug, Clone)]
@@ -182,27 +188,27 @@ impl Sinex {
                         match descriptor.trim() {
                             "OBSERVATION_SAMPLING" => {
                                 let sampling = u32::from_str_radix(content.trim(), 10)?;
-                                bias_description = bias_description.with_sampling(sampling)
+                                bias_description = bias_description.with_sampling(sampling);
                             },
                             "PARAMETER_SPACING" => {
                                 let spacing = u32::from_str_radix(content.trim(), 10)?;
-                                bias_description = bias_description.with_spacing(spacing)
+                                bias_description = bias_description.with_spacing(spacing);
                             },
                             "DETERMINATION_METHOD" => {
-                                let method = bias::DeterminationMethod::from_str(content.trim())?;
-                                bias_description = bias_description.with_method(method)
+                                let method = bias::Method::from_str(content.trim())?;
+                                bias_description = bias_description.with_method(method);
                             },
                             "BIAS_MODE" => {
                                 let mode = bias::header::BiasMode::from_str(content.trim())?;
-                                bias_description = bias_description.with_bias_mode(mode)
+                                bias_description = bias_description.with_bias_mode(mode);
                             },
                             "TIME_SYSTEM" => {
-                                let system = bias::TimeSystem::from_str(content.trim())?;
-                                bias_description = bias_description.with_time_system(system)
+                                let ts = TimeScale::from_str(content.trim())?;
+                                bias_description = bias_description.with_timescale(ts);
                             },
                             "RECEIVER_CLOCK_REFERENCE_GNSS" => {
                                 if let Ok(c) = Constellation::from_str(content.trim()) {
-                                    bias_description = bias_description.with_rcvr_clock_ref(c)
+                                    bias_description = bias_description.with_rcvr_clock_ref(c);
                                 }
                             },
                             "SATELLITE_CLOCK_REFERENCE_OBSERVABLES" => {

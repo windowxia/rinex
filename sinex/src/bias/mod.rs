@@ -1,90 +1,46 @@
 use strum_macros::EnumString;
-use thiserror::Error;
-//use std::collections::HashMap;
-use crate::datetime::{parse_datetime, ParseDateTimeError};
-use gnss::constellation::Constellation;
+
+use crate::{
+    epoch::{parse_epoch, Error as EpochParsingError},
+    Error,
+};
+
+use hifitime::{Duration, Epoch};
 
 pub mod description;
 pub mod header;
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum TimeSystem {
-    /// Time system of given GNSS constellation
-    GNSS(Constellation),
-    /// Coordinates Universal Time
-    UTC,
-    /// International Atomic Time
-    TAI,
+pub enum Method {
+    /// Intra Frequency Bias estimation, is the analysis of differences between
+    /// frequencies relying on a ionosphere reduction model.
+    IntraFrequency,
+    /// Inter Frequency Bias estimation, is the analysis of differences between
+    /// observables of different frequencyes, relying on a ionosphere reduction model.
+    InterFrequency,
+    /// Results from clock analysis
+    Clock,
+    /// Ionosphere (geometry free) analysis
+    Ionosphere,
+    /// Results from Clock and Ionosphere combined analysis
+    ClockIonoCombination,
 }
 
-#[derive(Debug, Error)]
-pub enum TimeSystemError {
-    #[error("unknown time system \"{0}\"")]
-    UnknownSystem(String),
-}
-
-impl std::str::FromStr for TimeSystem {
-    type Err = TimeSystemError;
-    fn from_str(content: &str) -> Result<Self, Self::Err> {
-        if content.eq("UTC") {
-            Ok(Self::UTC)
-        } else if content.eq("TAI") {
-            Ok(Self::TAI)
-        } else if let Ok(c) = Constellation::from_str(content) {
-            Ok(Self::GNSS(c))
-        } else {
-            Err(TimeSystemError::UnknownSystem(content.to_string()))
-        }
-    }
-}
-
-impl Default for TimeSystem {
-    fn default() -> Self {
-        Self::UTC
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum DeterminationMethodError {
-    #[error("unknown determination method \"{0}\"")]
-    UnknownMethod(String),
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum DeterminationMethod {
-    /// Intra Frequency Bias estimation,
-    /// is the analysis of differences between
-    /// frequencies relying on a ionosphere
-    /// reduction model
-    IntraFrequencyEstimation,
-    /// Inter Frequency Bias estimation,
-    /// is the analysis of differences between
-    /// observables of different frequencyes,
-    /// relying on a ionosphere reduction model
-    InterFrequencyEstimation,
-    /// Analyzing the ionosphere free linear combination
-    ClockAnalysis,
-    /// Analyzing the geometry free linear combination
-    IonosphereAnalysis,
-    /// Results from Clock and Ionosphere analysis combination
-    CombinedAnalysis,
-}
-
-impl std::str::FromStr for DeterminationMethod {
-    type Err = DeterminationMethodError;
+impl std::str::FromStr for Method {
+    type Err = Error;
     fn from_str(content: &str) -> Result<Self, Self::Err> {
         if content.eq("CLOCK_ANALYSIS") {
-            Ok(Self::ClockAnalysis)
+            Ok(Self::Clock)
         } else if content.eq("INTRA-FREQUENCY_BIAS_ESTIMATION") {
-            Ok(Self::IntraFrequencyEstimation)
+            Ok(Self::IntraFrequency)
         } else if content.eq("INTER-FREQUENCY_BIAS_ESTIMATION") {
-            Ok(Self::InterFrequencyEstimation)
+            Ok(Self::InterFrequency)
         } else if content.eq("IONOSPHERE_ANALYSIS") {
-            Ok(Self::IonosphereAnalysis)
+            Ok(Self::Ionosphere)
         } else if content.eq("COMBINED_ANALYSIS") {
-            Ok(Self::CombinedAnalysis)
+            Ok(Self::ClockIonoCombination)
         } else {
-            Err(DeterminationMethodError::UnknownMethod(content.to_string()))
+            Err(Error::UnknownMethod(content.to_string()))
         }
     }
 }
@@ -106,8 +62,8 @@ pub enum SolutionParsingError {
     ParseBiasTypeError(#[from] strum::ParseError),
     #[error("failed to parse bias estimate")]
     ParseFloatError(#[from] std::num::ParseFloatError),
-    #[error("failed to parse datetime field")]
-    ParseDateTimeError(#[from] ParseDateTimeError),
+    #[error("failed to parse epoch")]
+    EpochParsingError(#[from] EpochParsingError),
 }
 
 #[derive(Debug, Clone)]
@@ -124,9 +80,9 @@ pub struct Solution {
     /// notes as (OBS1, OBS2) in standards
     pub obs: (String, Option<String>),
     /// Start time for the bias estimate
-    pub start_time: chrono::NaiveDateTime,
+    pub start_time: Epoch,
     /// End time for the bias estimate
-    pub end_time: chrono::NaiveDateTime,
+    pub end_time: Epoch,
     /// Bias parameter unit
     pub unit: String,
     /// Bias parameter estimate (offset)
@@ -165,8 +121,8 @@ impl std::str::FromStr for Solution {
                 }
             },
             unit: unit.trim().to_string(),
-            start_time: parse_datetime(start_time.trim())?,
-            end_time: parse_datetime(end_time.trim())?,
+            start_time: parse_epoch(start_time.trim())?,
+            end_time: parse_epoch(end_time.trim())?,
             obs: {
                 if !obs2.trim().is_empty() {
                     (obs1.trim().to_string(), Some(obs2.trim().to_string()))
@@ -184,7 +140,7 @@ impl std::str::FromStr for Solution {
 
 impl Solution {
     /// Returns duration for this bias solution
-    pub fn duration(&self) -> chrono::TimeDelta {
+    pub fn duration(&self) -> Duration {
         self.end_time - self.start_time
     }
 }
@@ -193,16 +149,23 @@ impl Solution {
 mod tests {
     use super::*;
     use crate::Sinex;
-    use gnss::constellation::Constellation;
+    use hifitime::TimeScale;
     use std::str::FromStr;
     #[test]
-    fn test_determination_methods() {
-        let method = DeterminationMethod::from_str("COMBINED_ANALYSIS");
-        assert!(method.is_ok());
-        assert_eq!(method.unwrap(), DeterminationMethod::CombinedAnalysis);
+    fn method_parsing() {
+        for (desc, expected) in [
+            ("CLOCK_ANALYSIS", Method::Clock),
+            ("IONOSPHERE_ANALYSIS", Method::Ionosphere),
+            ("COMBINED_ANALYSIS", Method::ClockIonoCombination),
+            ("INTER-FREQUENCY_BIAS_ESTIMATION", Method::InterFrequency),
+            ("INTRA-FREQUENCY_BIAS_ESTIMATION", Method::IntraFrequency),
+        ] {
+            let method = Method::from_str(desc).unwrap();
+            assert_eq!(method, expected);
+        }
     }
     #[test]
-    fn test_solution_parser() {
+    fn solution_parser() {
         let solution = Solution::from_str(
             "ISB   G    G   GIEN      C1W  C2W  2011:113:86385 2011:115:00285 ns   0.000000000000000E+00 .000000E+00");
         assert!(solution.is_ok());
@@ -289,12 +252,9 @@ mod tests {
         let description = description.unwrap();
         assert_eq!(description.sampling, Some(300));
         assert_eq!(description.spacing, Some(86400));
-        assert_eq!(
-            description.method,
-            Some(DeterminationMethod::CombinedAnalysis)
-        );
+        assert_eq!(description.method, Some(Method::ClockIonoCombination));
         assert_eq!(description.bias_mode, header::BiasMode::Absolute);
-        assert_eq!(description.system, TimeSystem::GNSS(Constellation::GPS));
+        assert_eq!(description.timescale, TimeScale::GPST);
         assert_eq!(description.rcvr_clock_ref, None);
         assert_eq!(description.sat_clock_ref.len(), 2);
 
@@ -324,12 +284,9 @@ mod tests {
         let description = description.unwrap();
         assert_eq!(description.sampling, Some(300));
         assert_eq!(description.spacing, Some(86400));
-        assert_eq!(
-            description.method,
-            Some(DeterminationMethod::CombinedAnalysis)
-        );
+        assert_eq!(description.method, Some(Method::ClockIonoCombination));
         assert_eq!(description.bias_mode, header::BiasMode::Relative);
-        assert_eq!(description.system, TimeSystem::GNSS(Constellation::GPS));
+        assert_eq!(description.timescale, TimeScale::GPST);
         assert_eq!(description.rcvr_clock_ref, None);
         assert_eq!(description.sat_clock_ref.len(), 2);
 
