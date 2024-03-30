@@ -1,6 +1,7 @@
 use crate::cli::Context;
 use clap::ArgMatches;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
+
 use std::fs::File;
 use std::io::Write;
 use thiserror::Error;
@@ -41,7 +42,7 @@ pub enum Error {
 
 pub fn post_process(
     ctx: &Context,
-    results: BTreeMap<Epoch, PVTSolution>,
+    solutions: Vec<PVTSolution>,
     matches: &ArgMatches,
 ) -> Result<(), Error> {
     // create a dedicated plot context
@@ -53,13 +54,17 @@ pub fn post_process(
     let lat_ddeg = rad2deg(lat_rad);
     let lon_ddeg = rad2deg(lon_rad);
 
-    let epochs = results.keys().copied().collect::<Vec<Epoch>>();
+    let epochs = solutions
+        .iter()
+        .map(|pvt| pvt.epoch)
+        .collect::<Vec<Epoch>>();
 
     let (mut lat, mut lon) = (Vec::<f64>::new(), Vec::<f64>::new());
-    for result in results.values() {
-        let px = x + result.pos.x;
-        let py = y + result.pos.y;
-        let pz = z + result.pos.z;
+
+    for solution in &solutions {
+        let px = x + solution.pos.x;
+        let py = y + solution.pos.y;
+        let pz = z + solution.pos.z;
         let (lat_ddeg, lon_ddeg, _) = ecef2geodetic(px, py, pz, Ellipsoid::WGS84);
         lat.push(rad2deg(lat_ddeg));
         lon.push(rad2deg(lon_ddeg));
@@ -100,9 +105,9 @@ pub fn post_process(
         "error",
         Mode::Markers,
         epochs.clone(),
-        results.values().map(|e| e.pos.x).collect::<Vec<f64>>(),
-        results.values().map(|e| e.pos.y).collect::<Vec<f64>>(),
-        results.values().map(|e| e.pos.z).collect::<Vec<f64>>(),
+        solutions.iter().map(|pvt| pvt.pos.x).collect::<Vec<f64>>(),
+        solutions.iter().map(|pvt| pvt.pos.y).collect::<Vec<f64>>(),
+        solutions.iter().map(|pvt| pvt.pos.z).collect::<Vec<f64>>(),
     );
 
     plot_ctx.add_cartesian3d_plot(
@@ -118,8 +123,8 @@ pub fn post_process(
      * Add Spherical mesh with radius being the
      * largest error
      */
-    for error in results
-        .values()
+    for error in solutions
+        .iter()
         .map(|pvt| (pvt.pos.x.powi(2) + pvt.pos.y.powi(2) + pvt.pos.z.powi(2)).sqrt())
     {
         if error > worst_radius {
@@ -139,7 +144,7 @@ pub fn post_process(
         "velocity (x)",
         Mode::Markers,
         epochs.clone(),
-        results.values().map(|p| p.vel.x).collect::<Vec<f64>>(),
+        solutions.iter().map(|pvt| pvt.vel.x).collect::<Vec<f64>>(),
     );
     plot_ctx.add_trace(trace);
 
@@ -147,7 +152,7 @@ pub fn post_process(
         "velocity (y)",
         Mode::Markers,
         epochs.clone(),
-        results.values().map(|p| p.vel.y).collect::<Vec<f64>>(),
+        solutions.iter().map(|pvt| pvt.vel.y).collect::<Vec<f64>>(),
     )
     .y_axis("y2");
     plot_ctx.add_trace(trace);
@@ -157,7 +162,7 @@ pub fn post_process(
         "velocity (z)",
         Mode::Markers,
         epochs.clone(),
-        results.values().map(|p| p.vel.z).collect::<Vec<f64>>(),
+        solutions.iter().map(|pvt| pvt.vel.z).collect::<Vec<f64>>(),
     );
     plot_ctx.add_trace(trace);
 
@@ -166,7 +171,7 @@ pub fn post_process(
         "gdop",
         Mode::Markers,
         epochs.clone(),
-        results.values().map(|e| e.gdop()).collect::<Vec<f64>>(),
+        solutions.iter().map(|pvt| pvt.gdop()).collect::<Vec<f64>>(),
     );
     plot_ctx.add_trace(trace);
 
@@ -175,9 +180,9 @@ pub fn post_process(
         "hdop",
         Mode::Markers,
         epochs.clone(),
-        results
-            .values()
-            .map(|e| e.hdop(lat_ddeg, lon_ddeg))
+        solutions
+            .iter()
+            .map(|pvt| pvt.hdop(lat_ddeg, lon_ddeg))
             .collect::<Vec<f64>>(),
     );
     plot_ctx.add_trace(trace);
@@ -186,9 +191,9 @@ pub fn post_process(
         "vdop",
         Mode::Markers,
         epochs.clone(),
-        results
-            .values()
-            .map(|e| e.vdop(lat_ddeg, lon_ddeg))
+        solutions
+            .iter()
+            .map(|pvt| pvt.vdop(lat_ddeg, lon_ddeg))
             .collect::<Vec<f64>>(),
     )
     .y_axis("y2");
@@ -199,7 +204,7 @@ pub fn post_process(
         "dt",
         Mode::Markers,
         epochs.clone(),
-        results.values().map(|e| e.dt).collect::<Vec<f64>>(),
+        solutions.iter().map(|pvt| pvt.dt).collect::<Vec<f64>>(),
     );
     plot_ctx.add_trace(trace);
 
@@ -207,7 +212,7 @@ pub fn post_process(
         "tdop",
         Mode::Markers,
         epochs.clone(),
-        results.values().map(|e| e.tdop()).collect::<Vec<f64>>(),
+        solutions.iter().map(|pvt| pvt.tdop()).collect::<Vec<f64>>(),
     )
     .y_axis("y2");
     plot_ctx.add_trace(trace);
@@ -234,7 +239,7 @@ pub fn post_process(
         "Epoch, dx, dy, dz, x_ecef, y_ecef, z_ecef, speed_x, speed_y, speed_z, hdop, vdop, rcvr_clock_bias, tdop"
     )?;
 
-    for (epoch, solution) in results {
+    for solution in &solutions {
         let (px, py, pz) = (x + solution.pos.x, y + solution.pos.y, z + solution.pos.z);
         let (lat, lon, alt) = map_3d::ecef2geodetic(px, py, pz, Ellipsoid::WGS84);
         let (hdop, vdop, tdop) = (
@@ -245,7 +250,7 @@ pub fn post_process(
         writeln!(
             fd,
             "{:?}, {:.6E}, {:.6E}, {:.6E}, {:.6E}, {:.6E}, {:.6E}, {:.6E}, {:.6E}, {:.6E}, {:.6E}, {:.6E}, {:.6E}, {:.6E}",
-            epoch,
+            solution.epoch,
             solution.pos.x,
             solution.pos.y,
             solution.pos.z,
@@ -266,7 +271,7 @@ pub fn post_process(
             wp.elevation = Some(alt);
             wp.speed = None; // TODO ?
             wp.time = None; // TODO Gpx::Time
-            wp.name = Some(format!("{:?}", epoch));
+            wp.name = Some(format!("{:?}", solution.epoch));
             wp.hdop = Some(hdop);
             wp.vdop = Some(vdop);
             wp.sat = None; //TODO: nb of contributing satellites
@@ -277,7 +282,7 @@ pub fn post_process(
         }
         if matches.get_flag("kml") {
             kml_track.push(Kml::Placemark(Placemark {
-                name: Some(format!("{:?}", epoch)),
+                name: Some(format!("{:?}", solution.epoch)),
                 description: Some(String::from("\"Receiver Location\"")),
                 geometry: {
                     Some(KmlGeometry::Point(KmlPoint {

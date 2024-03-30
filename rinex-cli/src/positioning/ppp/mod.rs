@@ -1,7 +1,6 @@
 //! PPP solver
 use crate::cli::Context;
 use crate::positioning::{bd_model, kb_model, ng_model, tropo_components};
-use std::collections::BTreeMap;
 
 use rinex::{
     carrier::Carrier,
@@ -9,7 +8,7 @@ use rinex::{
     prelude::{Duration, SV},
 };
 
-use super::ObservationIter;
+use super::{ClockIter, ObservationIter};
 
 mod post_process;
 pub use post_process::{post_process, Error as PostProcessingError};
@@ -23,9 +22,8 @@ pub fn resolve(
     mut solver: Solver,
     rx_lat_ddeg: f64,
     observations: ObservationIter,
-) -> BTreeMap<Epoch, PVTSolution> {
-    let mut solutions: BTreeMap<Epoch, PVTSolution> = BTreeMap::new();
-
+    clocks: ClockIter,
+) -> Vec<PVTSolution> {
     //for ((t, flag), (_clk, vehicles)) in obs_data.observation() {
     //    let mut candidates = Vec::<Candidate>::with_capacity(4);
 
@@ -158,15 +156,8 @@ pub fn resolve(
     //        total: None, //TODO
     //        zwd_zdd,
     //    };
-
-    match solver.resolve(observations) {
-        Ok((t, pvt)) => {
-            debug!("{:?} : {:?}", t, pvt);
-            solutions.insert(t, pvt);
-        },
-        Err(e) => warn!("Solver error - {:?}", e),
+    match solver.resolve(observations, clocks) {
+        Ok(solutions) => solutions,
+        Err(e) => panic!("solver error: {:?}", e),
     }
-    //}
-
-    solutions
 }

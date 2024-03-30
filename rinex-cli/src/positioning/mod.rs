@@ -12,22 +12,27 @@ use ppp::PostProcessingError as PPPPostProcessingError;
 
 use clap::ArgMatches;
 use gnss::prelude::{Constellation, SV};
-use rinex::navigation::Ephemeris;
 
-use rinex::observation::ObservationData;
-use rinex::prelude::{EpochFlag, Observable, Rinex};
+use rinex::{
+    carrier::Carrier,
+    navigation::Ephemeris,
+    observation::ObservationData,
+    prelude::{EpochFlag, Observable, Rinex},
+};
 
 use std::collections::{BTreeMap, HashMap};
 
 use rtk::prelude::{
-    AprioriPosition, BdModel, Config, Duration, Epoch, KbModel, Method, NgModel, Observation,
-    ObservationIter as RTKObservationIter, PVTSolutionType, Solver, Vector3,
+    AprioriPosition, BdModel, Clock, ClockIter as RTKClockIter, Config, Duration, Epoch, KbModel,
+    Method, NgModel, Observation, ObservationIter as RTKObservationIter, PVTSolutionType, Solver,
+    Vector3,
 };
 
 use map_3d::{ecef2geodetic, rad2deg, Ellipsoid};
 
+/// Efficient Observation stream
 struct ObservationIter<'a> {
-    iter: Box<dyn Iterator<Item = (Epoch, SV, f64)> + 'a>,
+    iter: Box<dyn Iterator<Item = (Epoch, SV, f64, f64)> + 'a>,
 }
 
 impl<'a> ObservationIter<'a> {
@@ -35,14 +40,53 @@ impl<'a> ObservationIter<'a> {
         pseudo_range: Box<dyn Iterator<Item = (Epoch, EpochFlag, SV, &'a Observable, f64)> + 'a>,
     ) -> Self {
         Self {
-            iter: Box::new(pseudo_range.map(|(e, _flag, sv, _observable, data)| (e, sv, data))),
+            iter: Box::new(pseudo_range.filter_map(|(e, flag, sv, observable, data)| {
+                if flag.is_ok() {
+                    if let Ok(carrier) = Carrier::from_observable(sv.constellation, observable) {
+                        Some((e, sv, carrier.frequency(), data))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })),
         }
     }
 }
 
 impl<'a> RTKObservationIter for ObservationIter<'a> {
-    fn next(&self) -> Option<Observation> {
-        None
+    fn next(&mut self) -> Option<Observation> {
+        self.iter
+            .next()
+            .map(|(t, sv, freq_hz, data)| Observation::new(sv, t, data, freq_hz, None))
+    }
+}
+
+/// Efficient Clock state stream
+struct ClockIter<'a> {
+    iter: Box<dyn Iterator<Item = (Epoch, SV, f64, Option<f64>, Option<f64>)> + 'a>,
+}
+
+impl<'a> ClockIter<'a> {
+    fn from_ctx(ctx: &'a Context) -> Self {
+        Self {
+            iter: if let Some(clk) = ctx.data.clock() {
+                Box::new(clk.precise_sv_clock().map(|(t, sv, _, profile)| {
+                    (t, sv, profile.bias, profile.drift, profile.drift_change)
+                }))
+            } else {
+                panic!("not yet")
+            },
+        }
+    }
+}
+
+impl<'a> RTKClockIter for ClockIter<'a> {
+    fn next(&mut self) -> Option<Clock> {
+        self.iter
+            .next()
+            .map(|(sv, t, offset, drift, drift_r)| Clock::new(t, sv, offset, drift, drift_r))
     }
 }
 
@@ -261,6 +305,8 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
         .data
         .observation()
         .unwrap_or_else(|| panic!("positioning required Observation RINEX"));
+
+    let clocks = ClockIter::from_ctx(ctx);
     let observations = ObservationIter::from_ctx(rinex.pseudo_range());
 
     //if matches.get_flag("cggtts") {
@@ -269,7 +315,7 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
     //    cggtts_post_process(ctx, tracks, matches)?;
     //} else {
     /* PPP */
-    let pvt_solutions = ppp::resolve(solver, rx_lat_ddeg, observations);
+    let pvt_solutions = ppp::resolve(solver, rx_lat_ddeg, observations, clocks);
     /* save solutions (graphs, reports..) */
     ppp_post_process(ctx, pvt_solutions, matches)?;
     //}
