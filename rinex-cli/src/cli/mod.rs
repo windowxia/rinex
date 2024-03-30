@@ -37,6 +37,7 @@ impl Default for Cli {
 }
 
 /// Context defined by User.
+#[derive(Clone)]
 pub struct Context {
     /// Data context defined by user
     pub data: RnxContext,

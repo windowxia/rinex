@@ -411,8 +411,8 @@ impl QcObsAnalysis {
 
         let mut total_epochs = rnx.epoch().count();
         let mut complete_epochs: HashMap<(SV, Carrier), usize> = HashMap::new();
-        for (_, complete) in rnx.complete_epoch(Some(SNR::from(opts.min_snr_db))) {
-            for (sv, carrier) in complete {
+        for (_, sv, carriers) in rnx.complete_epoch(Some(SNR::from(opts.min_snr_db))) {
+            for carrier in carriers {
                 if let Some(counter) = complete_epochs.get_mut(&(sv, carrier)) {
                     *counter += 1;
                 } else {
@@ -434,7 +434,7 @@ impl QcObsAnalysis {
         }
         // append ssi: drop vehicle differentiation
         let mut ssi: HashMap<Observable, Vec<f64>> = HashMap::new();
-        for (_, _, obs, value) in rnx.ssi() {
+        for (_, _, _, obs, value) in rnx.ssi() {
             if let Some(values) = ssi.get_mut(obs) {
                 values.push(value);
             } else {
@@ -451,7 +451,7 @@ impl QcObsAnalysis {
             .collect();
         // append snr: drop vehicle differentiation
         let mut snr: HashMap<Observable, Vec<(Epoch, f64)>> = HashMap::new();
-        for ((e, _), _, obs, snr_value) in rnx.snr() {
+        for (e, _, _, obs, snr_value) in rnx.snr() {
             let snr_f64: f64 = (snr_value as u8).into();
             if let Some(values) = snr.get_mut(obs) {
                 values.push((e, snr_f64));
@@ -496,7 +496,7 @@ impl QcObsAnalysis {
             clock_drift: {
                 let rx_clock: Vec<_> = rnx
                     .recvr_clock()
-                    .map(|((e, _flag), value)| (e, value))
+                    .map(|(e, _flag, value)| (e, value))
                     .collect();
                 let der = Derivative::new(1);
                 let rx_clock_drift: Vec<(Epoch, f64)> = der.eval(rx_clock);

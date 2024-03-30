@@ -81,6 +81,7 @@ impl From<RinexType> for ProductType {
     }
 }
 
+#[derive(Clone)]
 enum BlobData {
     /// SP3 content
     Sp3(SP3),
@@ -121,7 +122,7 @@ impl BlobData {
 
 /// RnxContext is a structure dedicated to RINEX post processing workflows,
 /// like precise timing, positioning or atmosphere analysis.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct RnxContext {
     /// Files merged into self
     files: HashMap<ProductType, Vec<PathBuf>>,

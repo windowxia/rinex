@@ -36,7 +36,7 @@ pub fn plot_ionospheric_delay(ctx: &RnxContext, plot_ctx: &mut PlotContext) {
                 for (code_index, code) in codes.iter().enumerate() {
                     let x = obs
                         .pseudo_range()
-                        .filter_map(|((t, t_flag), svnn, observable, _)| {
+                        .filter_map(|(t, t_flag, svnn, observable, _)| {
                             if t_flag.is_ok() && svnn == sv && &observable == code {
                                 Some(t)
                             } else {

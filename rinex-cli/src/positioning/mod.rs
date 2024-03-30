@@ -1,26 +1,50 @@
 use crate::cli::Context;
 use std::fs::read_to_string;
+use thiserror::Error;
 
 mod ppp; // precise point positioning
 use ppp::post_process as ppp_post_process;
 use ppp::PostProcessingError as PPPPostProcessingError;
 
-mod cggtts; // CGGTTS special solver
-use cggtts::post_process as cggtts_post_process;
-use cggtts::PostProcessingError as CGGTTSPostProcessingError;
+//mod cggtts; // CGGTTS special solver
+//use cggtts::post_process as cggtts_post_process;
+//use cggtts::PostProcessingError as CGGTTSPostProcessingError;
 
 use clap::ArgMatches;
-use gnss::prelude::Constellation; // SV};
+use gnss::prelude::{Constellation, SV};
 use rinex::navigation::Ephemeris;
-use rinex::prelude::{Observable, Rinex};
+
+use rinex::observation::ObservationData;
+use rinex::prelude::{EpochFlag, Observable, Rinex};
+
+use std::collections::{BTreeMap, HashMap};
 
 use rtk::prelude::{
-    AprioriPosition, BdModel, Config, Duration, Epoch, InterpolationResult, KbModel, Method,
-    NgModel, Solver, Vector3,
+    AprioriPosition, BdModel, Config, Duration, Epoch, KbModel, Method, NgModel, Observation,
+    ObservationIter as RTKObservationIter, PVTSolutionType, Solver, Vector3,
 };
 
 use map_3d::{ecef2geodetic, rad2deg, Ellipsoid};
-use thiserror::Error;
+
+struct ObservationIter<'a> {
+    iter: Box<dyn Iterator<Item = (Epoch, SV, f64)> + 'a>,
+}
+
+impl<'a> ObservationIter<'a> {
+    fn from_ctx(
+        pseudo_range: Box<dyn Iterator<Item = (Epoch, EpochFlag, SV, &'a Observable, f64)> + 'a>,
+    ) -> Self {
+        Self {
+            iter: Box::new(pseudo_range.map(|(e, _flag, sv, _observable, data)| (e, sv, data))),
+        }
+    }
+}
+
+impl<'a> RTKObservationIter for ObservationIter<'a> {
+    fn next(&self) -> Option<Observation> {
+        None
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -30,8 +54,8 @@ pub enum Error {
     UndefinedAprioriPosition,
     #[error("ppp post processing error")]
     PPPPostProcessingError(#[from] PPPPostProcessingError),
-    #[error("cggtts post processing error")]
-    CGGTTSPostProcessingError(#[from] CGGTTSPostProcessingError),
+    // #[error("cggtts post processing error")]
+    // CGGTTSPostProcessingError(#[from] CGGTTSPostProcessingError),
 }
 
 pub fn tropo_components(meteo: Option<&Rinex>, t: Epoch, lat_ddeg: f64) -> Option<(f64, f64)> {
@@ -162,6 +186,7 @@ pub fn ng_model(nav: &Rinex, t: Epoch) -> Option<NgModel> {
 }
 
 pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Error> {
+    /* Resolution method */
     let method = match matches.get_flag("spp") {
         true => Method::SPP,
         false => Method::PPP,
@@ -173,27 +198,27 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
                 .unwrap_or_else(|_| panic!("failed to read configuration: permission denied"));
             let cfg = serde_json::from_str(&content)
                 .unwrap_or_else(|_| panic!("failed to parse configuration: invalid content"));
-            info!("using custom solver configuration: {:#?}", cfg);
+            info!("Using custom solver configuration: {:#?}", cfg);
             cfg
         },
         None => {
             let cfg = Config::preset(method);
-            info!("using default {:?} solver preset: {:#?}", method, cfg);
+            info!("Using {:?} preset: {:#?}", method, cfg);
             cfg
         },
     };
 
     /*
-     * verify requirements
+     * Verify requirements
      */
     let apriori_ecef = ctx.rx_ecef.ok_or(Error::UndefinedAprioriPosition)?;
 
     let apriori = Vector3::<f64>::new(apriori_ecef.0, apriori_ecef.1, apriori_ecef.2);
     let apriori = AprioriPosition::from_ecef(apriori);
-    let rx_lat_ddeg = apriori.geodetic[0];
+    let rx_lat_ddeg = apriori.geodetic()[0];
 
     if ctx.data.observation().is_none() {
-        panic!("positioning requires Observation RINEX");
+        panic!("Position solver requires Observation RINEX");
     }
 
     let nav_data = ctx
@@ -210,61 +235,43 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
     info!("Using solver {:?} method", method);
     info!("Using solver configuration {:#?}", cfg);
 
-    let solver = Solver::new(
-        &cfg,
-        apriori,
-        /* state vector interpolator */
-        |t, sv, order| {
-            /* SP3 source is prefered */
-            if let Some(sp3) = sp3_data {
-                if let Some((x, y, z)) = sp3.sv_position_interpolate(sv, t, order) {
-                    let (x, y, z) = (x * 1.0E3, y * 1.0E3, z * 1.0E3);
-                    let (elevation, azimuth) =
-                        Ephemeris::elevation_azimuth((x, y, z), apriori_ecef);
-                    Some(
-                        InterpolationResult::from_mass_center_position((x, y, z))
-                            .with_elevation_azimuth((elevation, azimuth)),
-                    )
-                } else {
-                    error!("{:?} ({}): sp3 interpolation failed", t, sv);
-                    if let Some((x, y, z)) = nav_data.sv_position_interpolate(sv, t, order) {
-                        let (x, y, z) = (x * 1.0E3, y * 1.0E3, z * 1.0E3);
-                        let (elevation, azimuth) =
-                            Ephemeris::elevation_azimuth((x, y, z), apriori_ecef);
-                        Some(
-                            InterpolationResult::from_apc_position((x, y, z))
-                                .with_elevation_azimuth((elevation, azimuth)),
-                        )
-                    } else {
-                        error!("{:?} ({}): nav interpolation failed", t, sv);
-                        None
-                    }
-                }
-            } else if let Some((x, y, z)) = nav_data.sv_position_interpolate(sv, t, order) {
-                let (x, y, z) = (x * 1.0E3, y * 1.0E3, z * 1.0E3);
-                let (elevation, azimuth) = Ephemeris::elevation_azimuth((x, y, z), apriori_ecef);
-                Some(
-                    InterpolationResult::from_apc_position((x, y, z))
-                        .with_elevation_azimuth((elevation, azimuth)),
-                )
-            } else {
-                error!("{:?} ({}): nav interpolation failed", t, sv);
-                None
+    /*
+     * Warn against interpolation errors
+     */
+    if ctx.data.clock().is_none() {
+        if ctx.data.sp3_has_clock() {
+            let sp3 = ctx.data.sp3().unwrap();
+            if sp3.epoch_interval >= Duration::from_seconds(300.0) {
+                warn!("Interpolating clock states from low sample rate SP3 will most likely introduce errors");
             }
-        },
-        /* APC corrections provider */
-        |_t, _sv, _freq| None,
-    )?;
-
-    if matches.get_flag("cggtts") {
-        /* CGGTTS special opmode */
-        let tracks = cggtts::resolve(ctx, solver, rx_lat_ddeg, matches)?;
-        cggtts_post_process(ctx, tracks, matches)?;
-    } else {
-        /* PPP */
-        let pvt_solutions = ppp::resolve(ctx, solver, rx_lat_ddeg);
-        /* save solutions (graphs, reports..) */
-        ppp_post_process(ctx, pvt_solutions, matches)?;
+        }
     }
+
+    let solver = Solver::new(
+        cfg,
+        apriori,
+        if matches.get_flag("cggtts") {
+            PVTSolutionType::TimeOnly
+        } else {
+            PVTSolutionType::PositionVelocityTime
+        },
+    );
+
+    let rinex = ctx
+        .data
+        .observation()
+        .unwrap_or_else(|| panic!("positioning required Observation RINEX"));
+    let observations = ObservationIter::from_ctx(rinex.pseudo_range());
+
+    //if matches.get_flag("cggtts") {
+    //    /* CGGTTS special opmode */
+    //    let tracks = cggtts::resolve(ctx, solver, rx_lat_ddeg, matches)?;
+    //    cggtts_post_process(ctx, tracks, matches)?;
+    //} else {
+    /* PPP */
+    let pvt_solutions = ppp::resolve(solver, rx_lat_ddeg, observations);
+    /* save solutions (graphs, reports..) */
+    ppp_post_process(ctx, pvt_solutions, matches)?;
+    //}
     Ok(())
 }

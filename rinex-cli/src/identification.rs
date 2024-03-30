@@ -270,13 +270,13 @@ impl SNRReport {
         Self {
             worst: {
                 data.snr()
-                    .min_by(|(_, _, _, snr_a), (_, _, _, snr_b)| snr_a.cmp(snr_b))
-                    .map(|((t, _), sv, obs, snr)| (t, sv.to_string(), obs.clone(), snr))
+                    .min_by(|(_, _, _, _, snr_a), (_, _, _, _, snr_b)| snr_a.cmp(snr_b))
+                    .map(|(t, _, sv, obs, snr)| (t, sv.to_string(), obs.clone(), snr))
             },
             best: {
                 data.snr()
-                    .max_by(|(_, _, _, snr_a), (_, _, _, snr_b)| snr_a.cmp(snr_b))
-                    .map(|((t, _), sv, obs, snr)| (t, sv.to_string(), obs.clone(), snr))
+                    .max_by(|(_, _, _, _, snr_a), (_, _, _, _, snr_b)| snr_a.cmp(snr_b))
+                    .map(|(t, _, sv, obs, snr)| (t, sv.to_string(), obs.clone(), snr))
             },
         }
     }

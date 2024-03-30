@@ -195,72 +195,70 @@ fn ctx_sv_clock_corrections(
     sp3: Option<&SP3>,
 ) -> CtxClockCorrections {
     let mut clock_corr = CtxClockCorrections::new();
-    for ((t, flag), (_, vehicles)) in obs.observation() {
+    for ((t, flag), _, sv, observable, observation) in obs.observation() {
         if !flag.is_ok() {
             continue;
         }
-        for (sv, _) in vehicles {
-            let sv_eph = nav.sv_ephemeris(*sv, *t);
-            if sv_eph.is_none() {
-                continue;
-            }
+        let sv_eph = nav.sv_ephemeris(sv, t);
+        if sv_eph.is_none() {
+            continue;
+        }
 
-            let (toe, sv_eph) = sv_eph.unwrap();
+        let (toe, sv_eph) = sv_eph.unwrap();
 
-            for product in [
-                ProductType::Radio,
-                ProductType::HighPrecisionSp3,
-                ProductType::HighPrecisionClk,
-            ] {
-                let clock_state: Option<(f64, f64, f64)> = match product {
-                    ProductType::Radio => Some(sv_eph.sv_clock()),
-                    ProductType::HighPrecisionSp3 => {
-                        if let Some(sp3) = sp3 {
-                            if let Some(bias) = sp3.sv_clock_interpolate(*t, *sv) {
-                                Some((bias, 0.0_f64, 0.0_f64))
-                            } else {
-                                None
-                            }
+        for product in [
+            ProductType::Radio,
+            ProductType::HighPrecisionSp3,
+            ProductType::HighPrecisionClk,
+        ] {
+            let clock_state: Option<(f64, f64, f64)> = match product {
+                ProductType::Radio => Some(sv_eph.sv_clock()),
+                ProductType::HighPrecisionSp3 => {
+                    if let Some(sp3) = sp3 {
+                        if let Some(bias) = sp3.sv_clock_interpolate(t, sv) {
+                            Some((bias, 0.0_f64, 0.0_f64))
                         } else {
                             None
-                        }
-                    },
-                    ProductType::HighPrecisionClk => {
-                        if let Some(clk) = clk {
-                            clk.precise_sv_clock()
-                                .filter_map(|(clk_t, clk_sv, _, prof)| {
-                                    if clk_t == *t && clk_sv == *sv {
-                                        Some((
-                                            prof.bias,
-                                            prof.drift.unwrap_or(0.0_f64),
-                                            prof.drift_change.unwrap_or(0.0_f64),
-                                        ))
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .reduce(|k, _| k)
-                        } else {
-                            None
-                        }
-                    },
-                };
-
-                if let Some(clock_state) = clock_state {
-                    let correction = Ephemeris::sv_clock_corr(*sv, clock_state, *t, toe);
-
-                    // insert result
-                    if let Some(inner) = clock_corr.get_mut(&product) {
-                        if let Some(inner) = inner.get_mut(sv) {
-                            inner.push((*t, correction));
-                        } else {
-                            inner.insert(*sv, vec![(*t, correction)]);
                         }
                     } else {
-                        let mut inner = BTreeMap::<SV, Vec<(Epoch, Duration)>>::new();
-                        inner.insert(*sv, vec![(*t, correction)]);
-                        clock_corr.insert(product, inner);
+                        None
                     }
+                },
+                ProductType::HighPrecisionClk => {
+                    if let Some(clk) = clk {
+                        clk.precise_sv_clock()
+                            .filter_map(|(clk_t, clk_sv, _, prof)| {
+                                if clk_t == t && clk_sv == sv {
+                                    Some((
+                                        prof.bias,
+                                        prof.drift.unwrap_or(0.0_f64),
+                                        prof.drift_change.unwrap_or(0.0_f64),
+                                    ))
+                                } else {
+                                    None
+                                }
+                            })
+                            .reduce(|k, _| k)
+                    } else {
+                        None
+                    }
+                },
+            };
+
+            if let Some(clock_state) = clock_state {
+                let correction = Ephemeris::sv_clock_corr(sv, clock_state, t, toe);
+
+                // insert result
+                if let Some(inner) = clock_corr.get_mut(&product) {
+                    if let Some(inner) = inner.get_mut(&sv) {
+                        inner.push((t, correction));
+                    } else {
+                        inner.insert(sv, vec![(t, correction)]);
+                    }
+                } else {
+                    let mut inner = BTreeMap::<SV, Vec<(Epoch, Duration)>>::new();
+                    inner.insert(sv, vec![(t, correction)]);
+                    clock_corr.insert(product, inner);
                 }
             }
         }

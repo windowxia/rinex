@@ -14,7 +14,6 @@ use rtk::prelude::{
     Candidate,
     Duration,
     Epoch,
-    InterpolationResult,
     IonosphericBias,
     Observation,
     PVTSolutionType,
@@ -56,16 +55,12 @@ fn reset_sv_tracker(sv: SV, trackers: &mut HashMap<(SV, Observable), SVTracker>)
 /*
  * Resolves CGGTTS tracks from input context
  */
-pub fn resolve<APC, I>(
+pub fn resolve(
     ctx: &Context,
-    mut solver: Solver<APC, I>,
+    mut solver: Solver,
     rx_lat_ddeg: f64,
     matches: &ArgMatches,
-) -> Result<Vec<Track>, PositioningError>
-where
-    APC: Fn(Epoch, SV, f64) -> Option<(f64, f64, f64)>,
-    I: Fn(Epoch, SV, usize) -> Option<InterpolationResult>,
-{
+) -> Result<Vec<Track>, PositioningError> {
     // custom tracking duration
     let trk_duration = match matches.get_one::<Duration>("tracking") {
         Some(tracking) => {
