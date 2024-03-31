@@ -399,10 +399,34 @@ impl Mask for Record {
                         !data.is_empty()
                     });
                 },
+                TargetItem::SvItem(items) => {
+                    self.retain(|_, data| {
+                        data.retain(|sysclk, _| {
+                            if let Some(sv) = sysclk.clock_type.as_sv() {
+                                items.contains(&sv)
+                            } else {
+                                false
+                            }
+                        });
+                        !data.is_empty()
+                    });
+                },
                 _ => {}, // TargetItem::
             },
             MaskOperand::NotEquals => match mask.item {
                 TargetItem::EpochItem(epoch) => self.retain(|e, _| *e != epoch),
+                TargetItem::SvItem(items) => {
+                    self.retain(|_, data| {
+                        data.retain(|sysclk, _| {
+                            if let Some(sv) = sysclk.clock_type.as_sv() {
+                                !items.contains(&sv)
+                            } else {
+                                true
+                            }
+                        });
+                        !data.is_empty()
+                    });
+                },
                 _ => {}, // TargetItem::
             },
             MaskOperand::GreaterEquals => match mask.item {
