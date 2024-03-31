@@ -8,7 +8,7 @@ use rinex::{
     prelude::{Duration, SV},
 };
 
-use super::{ClockIter, ObservationIter};
+use super::{ClockIter, ObservationIter, OrbitIter};
 
 mod post_process;
 pub use post_process::{post_process, Error as PostProcessingError};
@@ -22,6 +22,7 @@ pub fn resolve(
     mut solver: Solver,
     rx_lat_ddeg: f64,
     observations: ObservationIter,
+    orbits: OrbitIter,
     clocks: ClockIter,
 ) -> Vec<PVTSolution> {
     //for ((t, flag), (_clk, vehicles)) in obs_data.observation() {
@@ -156,7 +157,7 @@ pub fn resolve(
     //        total: None, //TODO
     //        zwd_zdd,
     //    };
-    match solver.resolve(observations, clocks) {
+    match solver.resolve(orbits, clocks, observations) {
         Ok(solutions) => solutions,
         Err(e) => panic!("solver error: {:?}", e),
     }

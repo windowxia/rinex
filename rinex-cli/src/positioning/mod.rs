@@ -24,8 +24,8 @@ use std::collections::{BTreeMap, HashMap};
 
 use rtk::prelude::{
     AprioriPosition, BdModel, Clock, ClockIter as RTKClockIter, Config, Duration, Epoch, KbModel,
-    Method, NgModel, Observation, ObservationIter as RTKObservationIter, PVTSolutionType, Solver,
-    Vector3,
+    Method, NgModel, Observation, ObservationIter as RTKObservationIter, Orbit,
+    OrbitIter as RTKOrbitIter, PVTSolutionType, Solver, Vector3,
 };
 
 use map_3d::{ecef2geodetic, rad2deg, Ellipsoid};
@@ -40,6 +40,7 @@ impl<'a> ObservationIter<'a> {
         pseudo_range: Box<dyn Iterator<Item = (Epoch, EpochFlag, SV, &'a Observable, f64)> + 'a>,
     ) -> Self {
         Self {
+            //TODO : Prefer high precision codes when that is feasible !
             iter: Box::new(pseudo_range.filter_map(|(e, flag, sv, observable, data)| {
                 if flag.is_ok() {
                     if let Ok(carrier) = Carrier::from_observable(sv.constellation, observable) {
@@ -70,13 +71,22 @@ struct ClockIter<'a> {
 
 impl<'a> ClockIter<'a> {
     fn from_ctx(ctx: &'a Context) -> Self {
+        let sp3_has_clk = ctx.data.sp3_has_clock();
         Self {
             iter: if let Some(clk) = ctx.data.clock() {
                 Box::new(clk.precise_sv_clock().map(|(t, sv, _, profile)| {
                     (t, sv, profile.bias, profile.drift, profile.drift_change)
                 }))
+            } else if sp3_has_clk {
+                let sp3 = ctx.data.sp3().unwrap();
+                Box::new(sp3.sv_clock().map(|(t, sv, offset)| {
+                    (t, sv, offset, None, None) //TODO: SP3 drift + drift/r
+                }))
             } else {
-                panic!("not yet")
+                let nav = ctx.data.brdc_navigation().unwrap(); // infaillible
+                Box::new(nav.sv_clock().map(|(t, sv, (offset, drift, driftr))| {
+                    (t, sv, offset, Some(drift), Some(driftr))
+                }))
             },
         }
     }
@@ -87,6 +97,37 @@ impl<'a> RTKClockIter for ClockIter<'a> {
         self.iter
             .next()
             .map(|(sv, t, offset, drift, drift_r)| Clock::new(t, sv, offset, drift, drift_r))
+    }
+}
+
+/// Efficient Orbit stream
+struct OrbitIter<'a> {
+    iter: Box<dyn Iterator<Item = Orbit> + 'a>,
+}
+
+impl<'a> OrbitIter<'a> {
+    fn from_ctx(ctx: &'a Context, apriori: &'a AprioriPosition) -> Self {
+        Self {
+            iter: if let Some(sp3) = ctx.data.sp3() {
+                Box::new(sp3.sv_position().map(|(t, sv, pos)| {
+                    Orbit::position(
+                        sv,
+                        t,
+                        (pos.0 * 1.0E3, pos.1 * 1.0E3, pos.2 * 1.0E3),
+                        apriori,
+                    )
+                }))
+            } else {
+                let nav = ctx.data.brdc_navigation().unwrap(); // infaillible
+                panic!("SP3 (High precision Orbits) are unfortunately required at the moment");
+            },
+        }
+    }
+}
+
+impl<'a> RTKOrbitIter for OrbitIter<'a> {
+    fn next(&mut self) -> Option<Orbit> {
+        self.iter.next()
     }
 }
 
@@ -233,7 +274,7 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
     /* Resolution method */
     let method = match matches.get_flag("spp") {
         true => Method::SPP,
-        false => Method::PPP,
+        false => panic!("PPP is not supported at the moment"),
     };
 
     let cfg = match matches.get_one::<String>("cfg") {
@@ -270,11 +311,6 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
         .brdc_navigation()
         .expect("positioning requires Navigation RINEX");
 
-    let sp3_data = ctx.data.sp3();
-    if sp3_data.is_none() {
-        panic!("High precision orbits (SP3) are unfortunately mandatory at the moment..");
-    }
-
     // print config to be used
     info!("Using solver {:?} method", method);
     info!("Using solver configuration {:#?}", cfg);
@@ -293,7 +329,7 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
 
     let solver = Solver::new(
         cfg,
-        apriori,
+        apriori.clone(),
         if matches.get_flag("cggtts") {
             PVTSolutionType::TimeOnly
         } else {
@@ -307,6 +343,7 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
         .unwrap_or_else(|| panic!("positioning required Observation RINEX"));
 
     let clocks = ClockIter::from_ctx(ctx);
+    let orbits = OrbitIter::from_ctx(ctx, &apriori);
     let observations = ObservationIter::from_ctx(rinex.pseudo_range());
 
     //if matches.get_flag("cggtts") {
@@ -315,7 +352,7 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
     //    cggtts_post_process(ctx, tracks, matches)?;
     //} else {
     /* PPP */
-    let pvt_solutions = ppp::resolve(solver, rx_lat_ddeg, observations, clocks);
+    let pvt_solutions = ppp::resolve(solver, rx_lat_ddeg, observations, orbits, clocks);
     /* save solutions (graphs, reports..) */
     ppp_post_process(ctx, pvt_solutions, matches)?;
     //}
