@@ -17,8 +17,5 @@ pub fn resolve(
     clocks: ClockIter,
     iono_models: IonosphereModelIter,
 ) -> Vec<PVTSolution> {
-    match solver.resolve(ephemerides, orbits, clocks, observations, iono_models) {
-        Ok(solutions) => solutions,
-        Err(e) => panic!("solver error: {:?}", e),
-    }
+    solver.resolve(ephemerides, orbits, clocks, observations, iono_models)
 }

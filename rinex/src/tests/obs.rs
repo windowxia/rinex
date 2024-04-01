@@ -716,10 +716,10 @@ mod test {
             .join("KOSG0010.95O");
         let fullpath = path.to_string_lossy();
         let rnx = Rinex::from_file(fullpath.as_ref()).unwrap();
-        // for (e, sv) in rnx.sv_epoch() {
-        //     println!("{:?} @ {}", sv, e);
-        // }
-        // panic!("stop");
+        for (e, sv) in rnx.sv_epoch() {
+            println!("{:?} @ {}", sv, e);
+        }
+        panic!("stop");
         test_observation_rinex(
             &rnx,
             "2.0",
@@ -760,16 +760,16 @@ mod test {
 
         let phase_l1c: Vec<_> = rnx
             .carrier_phase()
-            .filter_map(|(e, sv, obs, value)| {
+            .filter_map(|(e, flag, sv, obs, value)| {
                 if *obs == observable!("L1C") {
-                    Some((e, sv, value))
+                    Some((e, flag, sv, value))
                 } else {
                     None
                 }
             })
             .collect();
 
-        for ((epoch, flag), sv, l1c) in phase_l1c {
+        for (epoch, flag, sv, l1c) in phase_l1c {
             assert!(flag.is_ok(), "faulty epoch flag");
             if epoch == Epoch::from_str("2021-12-12T00:00:30 UTC").unwrap() {
                 if sv == sv!("G07") {
@@ -800,16 +800,16 @@ mod test {
 
         let c1: Vec<_> = rnx
             .pseudo_range()
-            .filter_map(|(e, sv, obs, value)| {
+            .filter_map(|(e, flag, sv, obs, value)| {
                 if *obs == observable!("C1") {
-                    Some((e, sv, value))
+                    Some((e, flag, sv, value))
                 } else {
                     None
                 }
             })
             .collect();
 
-        for ((epoch, flag), sv, l1c) in c1 {
+        for (epoch, flag, sv, l1c) in c1 {
             assert!(flag.is_ok(), "faulty epoch flag");
             if epoch == Epoch::from_str("2021-12-12T00:00:30 UTC").unwrap() {
                 if sv == sv!("G07") {

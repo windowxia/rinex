@@ -1594,20 +1594,18 @@ impl Rinex {
     /// let rnx = Rinex::from_file("../test_resources/CRNX/V3/KUNZ00CZE.crx")
     ///    .unwrap();
     ///
-    /// for ((epoch, flag), (clock_offset, vehicles)) in rnx.observation() {
+    /// for ((epoch, flag), clock_offset, sv, observable, data) in rnx.observation() {
     ///     assert!(flag.is_ok()); // no invalid epochs in this file
     ///     assert!(clock_offset.is_none()); // we don't have an example for this, at the moment
-    ///     for (sv, observations) in vehicles {
-    ///         if *sv == sv!("E01") {
-    ///             for (observable, observation) in observations {
-    ///                 if *observable == observable!("L1C") {
-    ///                     if let Some(lli) = observation.lli {
-    ///                         // A flag might be attached to each observation.
-    ///                         // Implemented as `bitflag`, it supports bit masking operations
-    ///                     }
-    ///                     if let Some(snri) = observation.snr {
-    ///                         // SNR indicator might exist too
-    ///                     }
+    ///     if *sv == sv!("E01") {
+    ///         for (observable, observation) in observations {
+    ///             if *observable == observable!("L1C") {
+    ///                 if let Some(lli) = observation.lli {
+    ///                     // A flag might be attached to each observation.
+    ///                     // Implemented as `bitflag`, it supports bit masking operations
+    ///                 }
+    ///                 if let Some(snri) = observation.snr {
+    ///                     // SNR indicator might exist too
     ///                 }
     ///             }
     ///         }
@@ -1784,7 +1782,7 @@ impl Rinex {
     /// use rinex::prelude::Rinex;
     /// let rnx = Rinex::from_file("../test_resources/OBS/V3/DUTH0630.22O")
     ///     .unwrap();
-    /// for ((epoch, flag), clk) in rnx.recvr_clock() {
+    /// for (epoch, flag, clk) in rnx.recvr_clock() {
     ///     // epoch: [hifitime::Epoch]
     ///     // clk: receiver clock offset [s]
     /// }
@@ -1807,9 +1805,9 @@ impl Rinex {
     ///     .unwrap();
     /// // example: design a L1 signal iterator
     /// let phase_l1c = rnx.carrier_phase()
-    ///     .filter_map(|(e, sv, obs, value)| {
+    ///     .filter_map(|(e, flag, sv, obs, value)| {
     ///         if *obs == observable!("L1C") {
-    ///             Some((e, sv, value))
+    ///            Some((e, sv, value))
     ///         } else {
     ///             None
     ///         }
@@ -1851,7 +1849,7 @@ impl Rinex {
     ///     .unwrap();
     /// // example: design a C1 pseudo range iterator
     /// let c1 = rnx.pseudo_range()
-    ///     .filter_map(|(e, sv, obs, value)| {
+    ///     .filter_map(|(e, flag, sv, obs, value)| {
     ///         if *obs == observable!("C1") {
     ///             Some((e, sv, value))
     ///         } else {
@@ -1873,35 +1871,16 @@ impl Rinex {
                 }),
         )
     }
-    /// Returns an Iterator over pseudo range observations in valid
-    /// Epochs, with valid LLI flags
-    pub fn pseudo_range_ok(&self) -> Box<dyn Iterator<Item = (Epoch, SV, &Observable, f64)> + '_> {
-        Box::new(
-            self.observation()
-                .flat_map(|((e, flag), _, sv, observable, observation)| {
-                    if observable.is_pseudorange_observable() {
-                        if flag.is_ok() {
-                            Some((e, sv, observable, observation.obs))
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                }),
-        )
-    }
-
     /// Returns an Iterator over fractional pseudo range observations
     pub fn pseudo_range_fract(
         &self,
     ) -> Box<dyn Iterator<Item = (Epoch, EpochFlag, SV, &Observable, f64)> + '_> {
+        const SPEED_OF_LIGHT: f64 = 299792458_f64;
         Box::new(
             self.pseudo_range()
                 .filter_map(|(e, flag, sv, observable, pr)| {
                     if let Some(t) = observable.code_length(sv.constellation) {
-                        let c = 299792458_f64; // speed of light
-                        Some((e, flag, sv, observable, pr / c / t))
+                        Some((e, flag, sv, observable, pr / SPEED_OF_LIGHT / t))
                     } else {
                         None
                     }
@@ -1919,7 +1898,7 @@ impl Rinex {
     ///     .unwrap();
     /// // example: design a L1 signal doppler iterator
     /// let doppler_l1 = rnx.doppler()
-    ///     .filter_map(|(e, sv, obs, value)| {
+    ///     .filter_map(|(e, flag, sv, obs, value)| {
     ///         if *obs == observable!("D1") {
     ///             Some((e, sv, value))
     ///         } else {
@@ -1951,7 +1930,7 @@ impl Rinex {
     ///     .unwrap();
     /// // example: design a S1: L1 strength iterator
     /// let ssi_l1 = rnx.ssi()
-    ///     .filter_map(|(e, sv, obs, value)| {
+    ///     .filter_map(|(e, flag, sv, obs, value)| {
     ///         if *obs == observable!("S1") {
     ///             Some((e, sv, value))
     ///         } else {
@@ -1978,7 +1957,7 @@ impl Rinex {
     /// let rinex =
     ///     Rinex::from_file("../test_resources/OBS/V3/ALAC00ESP_R_20220090000_01D_30S_MO.rnx")
     ///         .unwrap();
-    /// for ((e, flag), sv, observable, snr) in rinex.snr() {
+    /// for (e, flag, sv, observable, snr) in rinex.snr() {
     ///     // See RINEX specs or [SNR] documentation
     ///     if snr.weak() {
     ///     } else if snr.strong() {
@@ -2009,7 +1988,7 @@ impl Rinex {
     ///         .unwrap();
     /// let custom_mask
     ///     = LliFlags::OK_OR_UNKNOWN | LliFlags::UNDER_ANTI_SPOOFING;
-    /// for ((e, flag), sv, observable, lli) in rinex.lli() {
+    /// for (e, flag, sv, observable, lli) in rinex.lli() {
     ///     // See RINEX specs or [LliFlags] documentation
     ///     if lli.intersects(custom_mask) {
     ///         // sane observation but under AS

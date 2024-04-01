@@ -40,8 +40,6 @@ pub use orbit::OrbitIter;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("solver error")]
-    SolverError(#[from] rtk::Error),
     #[error("undefined apriori position")]
     UndefinedAprioriPosition,
     #[error("ppp post processing error")]
