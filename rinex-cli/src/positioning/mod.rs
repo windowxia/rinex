@@ -189,12 +189,11 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
                 .unwrap_or_else(|_| panic!("failed to read configuration: permission denied"));
             let cfg = serde_json::from_str(&content)
                 .unwrap_or_else(|_| panic!("failed to parse configuration: invalid content"));
-            info!("Using custom solver configuration: {:#?}", cfg);
+            info!("Using custom configuration: {:#?}", cfg);
             cfg
         },
         None => {
             let cfg = Config::preset(method);
-            info!("Using {:?} preset: {:#?}", method, cfg);
             cfg
         },
     };
@@ -206,7 +205,7 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
 
     let apriori = Vector3::<f64>::new(apriori_ecef.0, apriori_ecef.1, apriori_ecef.2);
     let apriori = AprioriPosition::from_ecef(apriori);
-    let rx_lat_ddeg = apriori.geodetic()[0];
+    let rx_lat_ddeg = apriori.geodetic_ddeg()[0];
 
     if ctx.data.observation().is_none() {
         panic!("Position solver requires Observation RINEX");
@@ -218,8 +217,8 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
         .expect("positioning requires Navigation RINEX");
 
     // print config to be used
-    info!("Using solver {:?} method", method);
-    info!("Using solver configuration {:#?}", cfg);
+    info!("Using {:?} method", method);
+    info!("Using configuration {:#?}", cfg);
 
     /*
      * Warn against interpolation errors

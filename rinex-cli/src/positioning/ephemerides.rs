@@ -1,11 +1,11 @@
 use crate::cli::Context;
-use hifitime::Epoch;
 
 use rinex::{
     observation::ObservationData,
     prelude::{EpochFlag, Observable},
 };
 
+use hifitime::{Epoch, TimeScale, Unit};
 use rtk::prelude::EphemeridesIter as RTKEphemeridesIter;
 
 /// Efficient Observation stream
@@ -20,7 +20,18 @@ impl<'a> EphemeridesIter<'a> {
             iter: Box::new(nav.ephemeris().filter_map(|(t, (_, sv, ephemeris))| {
                 let toe_week = ephemeris.get_week()?;
                 let toe_secs = ephemeris.kepler()?.toe;
-                Some(Epoch::default()) //TODO
+                assert!(
+                    t.time_scale.is_gnss(),
+                    "Only GNSS timescales expected here - invalid RINEX"
+                );
+                let toe_week_gpst = match sv.timescale() {
+                    Some(TimeScale::GST) => toe_week - 1024,
+                    _ => toe_week,
+                };
+                Some(Epoch::from_duration(
+                    (toe_week_gpst as f64) * 7.0 * Unit::Day + toe_secs * Unit::Second,
+                    TimeScale::GPST,
+                ))
             })),
         }
     }

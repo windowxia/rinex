@@ -203,7 +203,7 @@ pub fn main() -> Result<(), Error> {
                     lat = rad2deg(lat);
                     lon = rad2deg(lon);
                     info!(
-                        "manually defined position: {:?} [ECEF] (lat={:.5}°, lon={:.5}°",
+                        "manually defined position: {:?} [ECEF] (lat={:.5}°, lon={:.5}°)",
                         (x, y, z),
                         lat,
                         lon
@@ -217,7 +217,7 @@ pub fn main() -> Result<(), Error> {
                         lat = rad2deg(lat);
                         lon = rad2deg(lon);
                         info!(
-                            "position defined in dataset: {:?} [ECEF] (lat={:.5}°, lon={:.5}°",
+                            "position defined in dataset: {:?} [ECEF] (lat={:.5}°, lon={:.5}°)",
                             (x, y, z),
                             lat,
                             lon
