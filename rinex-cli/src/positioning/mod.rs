@@ -2,6 +2,11 @@ use crate::cli::Context;
 use std::fs::read_to_string;
 use thiserror::Error;
 
+mod clock;
+mod ephemerides;
+mod observation;
+mod orbit;
+
 mod ppp; // precise point positioning
 use ppp::post_process as ppp_post_process;
 use ppp::PostProcessingError as PPPPostProcessingError;
@@ -14,122 +19,23 @@ use clap::ArgMatches;
 use gnss::prelude::{Constellation, SV};
 
 use rinex::{
-    carrier::Carrier,
-    navigation::Ephemeris,
-    observation::ObservationData,
+    //navigation::Ephemeris,
     prelude::{EpochFlag, Observable, Rinex},
 };
 
 use std::collections::{BTreeMap, HashMap};
 
 use rtk::prelude::{
-    AprioriPosition, BdModel, Clock, ClockIter as RTKClockIter, Config, Duration, Epoch, KbModel,
-    Method, NgModel, Observation, ObservationIter as RTKObservationIter, Orbit,
-    OrbitIter as RTKOrbitIter, PVTSolutionType, Solver, Vector3,
+    AprioriPosition, BdModel, Config, Duration, Epoch, KbModel, Method, NgModel, PVTSolutionType,
+    Solver, Vector3,
 };
 
 use map_3d::{ecef2geodetic, rad2deg, Ellipsoid};
 
-/// Efficient Observation stream
-struct ObservationIter<'a> {
-    iter: Box<dyn Iterator<Item = (Epoch, SV, f64, f64)> + 'a>,
-}
-
-impl<'a> ObservationIter<'a> {
-    fn from_ctx(
-        pseudo_range: Box<dyn Iterator<Item = (Epoch, EpochFlag, SV, &'a Observable, f64)> + 'a>,
-    ) -> Self {
-        Self {
-            //TODO : Prefer high precision codes when that is feasible !
-            iter: Box::new(pseudo_range.filter_map(|(e, flag, sv, observable, data)| {
-                if flag.is_ok() {
-                    if let Ok(carrier) = Carrier::from_observable(sv.constellation, observable) {
-                        Some((e, sv, carrier.frequency(), data))
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            })),
-        }
-    }
-}
-
-impl<'a> RTKObservationIter for ObservationIter<'a> {
-    fn next(&mut self) -> Option<Observation> {
-        self.iter
-            .next()
-            .map(|(t, sv, freq_hz, data)| Observation::new(sv, t, data, freq_hz, None))
-    }
-}
-
-/// Efficient Clock state stream
-struct ClockIter<'a> {
-    iter: Box<dyn Iterator<Item = (Epoch, SV, f64, Option<f64>, Option<f64>)> + 'a>,
-}
-
-impl<'a> ClockIter<'a> {
-    fn from_ctx(ctx: &'a Context) -> Self {
-        let sp3_has_clk = ctx.data.sp3_has_clock();
-        Self {
-            iter: if let Some(clk) = ctx.data.clock() {
-                Box::new(clk.precise_sv_clock().map(|(t, sv, _, profile)| {
-                    (t, sv, profile.bias, profile.drift, profile.drift_change)
-                }))
-            } else if sp3_has_clk {
-                let sp3 = ctx.data.sp3().unwrap();
-                Box::new(sp3.sv_clock().map(|(t, sv, offset)| {
-                    (t, sv, offset, None, None) //TODO: SP3 drift + drift/r
-                }))
-            } else {
-                let nav = ctx.data.brdc_navigation().unwrap(); // infaillible
-                Box::new(nav.sv_clock().map(|(t, sv, (offset, drift, driftr))| {
-                    (t, sv, offset, Some(drift), Some(driftr))
-                }))
-            },
-        }
-    }
-}
-
-impl<'a> RTKClockIter for ClockIter<'a> {
-    fn next(&mut self) -> Option<Clock> {
-        self.iter
-            .next()
-            .map(|(sv, t, offset, drift, drift_r)| Clock::new(t, sv, offset, drift, drift_r))
-    }
-}
-
-/// Efficient Orbit stream
-struct OrbitIter<'a> {
-    iter: Box<dyn Iterator<Item = Orbit> + 'a>,
-}
-
-impl<'a> OrbitIter<'a> {
-    fn from_ctx(ctx: &'a Context, apriori: &'a AprioriPosition) -> Self {
-        Self {
-            iter: if let Some(sp3) = ctx.data.sp3() {
-                Box::new(sp3.sv_position().map(|(t, sv, pos)| {
-                    Orbit::position(
-                        sv,
-                        t,
-                        (pos.0 * 1.0E3, pos.1 * 1.0E3, pos.2 * 1.0E3),
-                        apriori,
-                    )
-                }))
-            } else {
-                let nav = ctx.data.brdc_navigation().unwrap(); // infaillible
-                panic!("SP3 (High precision Orbits) are unfortunately required at the moment");
-            },
-        }
-    }
-}
-
-impl<'a> RTKOrbitIter for OrbitIter<'a> {
-    fn next(&mut self) -> Option<Orbit> {
-        self.iter.next()
-    }
-}
+pub use clock::ClockIter;
+pub use ephemerides::EphemeridesIter;
+pub use observation::ObservationIter;
+pub use orbit::OrbitIter;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -344,6 +250,7 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
 
     let clocks = ClockIter::from_ctx(ctx);
     let orbits = OrbitIter::from_ctx(ctx, &apriori);
+    let ephemerides = EphemeridesIter::from_ctx(ctx);
     let observations = ObservationIter::from_ctx(rinex.pseudo_range());
 
     //if matches.get_flag("cggtts") {
@@ -352,7 +259,14 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
     //    cggtts_post_process(ctx, tracks, matches)?;
     //} else {
     /* PPP */
-    let pvt_solutions = ppp::resolve(solver, rx_lat_ddeg, observations, orbits, clocks);
+    let pvt_solutions = ppp::resolve(
+        solver,
+        rx_lat_ddeg,
+        ephemerides,
+        observations,
+        orbits,
+        clocks,
+    );
     /* save solutions (graphs, reports..) */
     ppp_post_process(ctx, pvt_solutions, matches)?;
     //}

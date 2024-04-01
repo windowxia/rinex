@@ -8,7 +8,7 @@ use rinex::{
     prelude::{Duration, SV},
 };
 
-use super::{ClockIter, ObservationIter, OrbitIter};
+use super::{ClockIter, EphemeridesIter, ObservationIter, OrbitIter};
 
 mod post_process;
 pub use post_process::{post_process, Error as PostProcessingError};
@@ -21,6 +21,7 @@ use rtk::prelude::{
 pub fn resolve(
     mut solver: Solver,
     rx_lat_ddeg: f64,
+    ephemerides: EphemeridesIter,
     observations: ObservationIter,
     orbits: OrbitIter,
     clocks: ClockIter,
@@ -157,7 +158,7 @@ pub fn resolve(
     //        total: None, //TODO
     //        zwd_zdd,
     //    };
-    match solver.resolve(orbits, clocks, observations) {
+    match solver.resolve(ephemerides, orbits, clocks, observations) {
         Ok(solutions) => solutions,
         Err(e) => panic!("solver error: {:?}", e),
     }

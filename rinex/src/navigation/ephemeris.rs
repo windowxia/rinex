@@ -122,21 +122,15 @@ impl Ephemeris {
         self.orbits
             .insert(field.to_string(), OrbitItem::from(value));
     }
-    /*
-     * Retrieves week counter, if such data exists
-     */
-    pub(crate) fn get_week(&self) -> Option<u32> {
+    /// Retrieves week counter, if such data exists
+    pub fn get_week(&self) -> Option<u32> {
         self.orbits.get("week").and_then(|field| field.as_u32())
     }
-    /*
-     * Returns TGD field, if such field is not empty, expressed as a [Duration]
-     */
+    /// Returns TGD field, if such field is not empty, expressed as a [Duration]
     pub fn tgd(&self) -> Option<Duration> {
         Some(Duration::from_seconds(self.get_orbit_f64("tgd")?))
     }
-    /*
-     * Helper to apply a clock correction to provided time (expressed as Epoch)
-     */
+    /// Returns Clock Correction to applies to said SV expressed as a [Duration]
     pub fn sv_clock_corr(sv: SV, clock_bias: (f64, f64, f64), t: Epoch, toe: Epoch) -> Duration {
         let (a0, a1, a2) = clock_bias;
         match sv.constellation {
