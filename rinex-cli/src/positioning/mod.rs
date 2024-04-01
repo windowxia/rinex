@@ -4,6 +4,7 @@ use thiserror::Error;
 
 mod clock;
 mod ephemerides;
+mod ionosphere;
 mod observation;
 mod orbit;
 
@@ -26,14 +27,14 @@ use rinex::{
 use std::collections::{BTreeMap, HashMap};
 
 use rtk::prelude::{
-    AprioriPosition, BdModel, Config, Duration, Epoch, KbModel, Method, NgModel, PVTSolutionType,
-    Solver, Vector3,
+    AprioriPosition, Config, Duration, Epoch, Method, PVTSolutionType, Solver, Vector3,
 };
 
 use map_3d::{ecef2geodetic, rad2deg, Ellipsoid};
 
 pub use clock::ClockIter;
 pub use ephemerides::EphemeridesIter;
+pub use ionosphere::IonosphereModelIter;
 pub use observation::ObservationIter;
 pub use orbit::OrbitIter;
 
@@ -126,56 +127,6 @@ pub fn tropo_components(meteo: Option<&Rinex>, t: Epoch, lat_ddeg: f64) -> Optio
     }
 }
 
-/*
- * Grabs nearest KB model (in time)
- */
-pub fn kb_model(nav: &Rinex, t: Epoch) -> Option<KbModel> {
-    let kb_model = nav
-        .klobuchar_models()
-        .min_by_key(|(t_i, _, _)| (t - *t_i).abs());
-
-    if let Some((_, sv, kb_model)) = kb_model {
-        Some(KbModel {
-            h_km: {
-                match sv.constellation {
-                    Constellation::BeiDou => 375.0,
-                    // we only expect GPS or BDS here,
-                    // badly formed RINEX will generate errors in the solutions
-                    _ => 350.0,
-                }
-            },
-            alpha: kb_model.alpha,
-            beta: kb_model.beta,
-        })
-    } else {
-        /* RINEX 3 case */
-        let iono_corr = nav.header.ionod_correction?;
-        iono_corr.as_klobuchar().map(|kb_model| KbModel {
-            h_km: 350.0, //TODO improve this
-            alpha: kb_model.alpha,
-            beta: kb_model.beta,
-        })
-    }
-}
-
-/*
- * Grabs nearest BD model (in time)
- */
-pub fn bd_model(nav: &Rinex, t: Epoch) -> Option<BdModel> {
-    nav.bdgim_models()
-        .min_by_key(|(t_i, _)| (t - *t_i).abs())
-        .map(|(_, model)| BdModel { alpha: model.alpha })
-}
-
-/*
- * Grabs nearest NG model (in time)
- */
-pub fn ng_model(nav: &Rinex, t: Epoch) -> Option<NgModel> {
-    nav.nequick_g_models()
-        .min_by_key(|(t_i, _)| (t - *t_i).abs())
-        .map(|(_, model)| NgModel { a: model.a })
-}
-
 pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Error> {
     /* Resolution method */
     let method = match matches.get_flag("spp") {
@@ -250,6 +201,7 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
     let clocks = ClockIter::from_ctx(ctx);
     let orbits = OrbitIter::from_ctx(ctx, &apriori);
     let ephemerides = EphemeridesIter::from_ctx(ctx);
+    let iono_models = IonosphereModelIter::from_ctx(ctx);
     let observations = ObservationIter::from_ctx(rinex.pseudo_range());
 
     //if matches.get_flag("cggtts") {
@@ -265,6 +217,7 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
         observations,
         orbits,
         clocks,
+        iono_models,
     );
     /* save solutions (graphs, reports..) */
     ppp_post_process(ctx, pvt_solutions, matches)?;

@@ -20,7 +20,7 @@ impl<'a> OrbitIter<'a> {
                     )
                 }))
             } else {
-                let nav = ctx.data.brdc_navigation().unwrap(); // infaillible
+                //let nav = ctx.data.brdc_navigation().unwrap(); // infaillible
                 panic!("SP3 (High precision Orbits) are unfortunately required at the moment");
             },
         }
