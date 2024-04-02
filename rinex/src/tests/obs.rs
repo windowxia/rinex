@@ -706,7 +706,6 @@ mod test {
         assert_eq!(epoch.len(), 47);
     }
     #[test]
-    #[ignore]
     fn v2_kosg0010_95o() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("..")
@@ -716,6 +715,9 @@ mod test {
             .join("KOSG0010.95O");
         let fullpath = path.to_string_lossy();
         let rnx = Rinex::from_file(fullpath.as_ref()).unwrap();
+        for ((e, flag), _, sv, observable, data) in rnx.observation() {
+            println!("{:?} - {}({}) - {:?}", sv, observable, e, data);
+        }
         for (e, sv) in rnx.sv_epoch() {
             println!("{:?} @ {}", sv, e);
         }

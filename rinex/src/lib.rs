@@ -1597,16 +1597,14 @@ impl Rinex {
     /// for ((epoch, flag), clock_offset, sv, observable, data) in rnx.observation() {
     ///     assert!(flag.is_ok()); // no invalid epochs in this file
     ///     assert!(clock_offset.is_none()); // we don't have an example for this, at the moment
-    ///     if *sv == sv!("E01") {
-    ///         for (observable, observation) in observations {
-    ///             if *observable == observable!("L1C") {
-    ///                 if let Some(lli) = observation.lli {
-    ///                     // A flag might be attached to each observation.
-    ///                     // Implemented as `bitflag`, it supports bit masking operations
-    ///                 }
-    ///                 if let Some(snri) = observation.snr {
-    ///                     // SNR indicator might exist too
-    ///                 }
+    ///     if sv == sv!("E01") {
+    ///         if *observable == observable!("L1C") {
+    ///             if let Some(lli) = data.lli {
+    ///                 // A flag might be attached to each observation.
+    ///                 // Implemented as `bitflag`, it supports bit masking operations
+    ///             }
+    ///             if let Some(snri) = data.snr {
+    ///                 // SNR indicator might exist too
     ///             }
     ///         }
     ///     }
