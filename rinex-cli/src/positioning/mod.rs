@@ -7,6 +7,7 @@ mod ephemerides;
 mod ionosphere;
 mod observation;
 mod orbit;
+mod sv;
 
 mod ppp; // precise point positioning
 use ppp::post_process as ppp_post_process;
@@ -37,6 +38,7 @@ pub use ephemerides::EphemeridesIter;
 pub use ionosphere::IonosphereModelIter;
 pub use observation::ObservationIter;
 pub use orbit::OrbitIter;
+pub use sv::SVInfoIter;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -167,7 +169,6 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
 
     // print config to be used
     info!("Using {:?} method", method);
-    info!("Using configuration {:#?}", cfg);
 
     /*
      * Warn against interpolation errors
@@ -197,6 +198,7 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
         .unwrap_or_else(|| panic!("positioning required Observation RINEX"));
 
     let clocks = ClockIter::from_ctx(ctx);
+    let sv_infos = SVInfoIter::from_ctx(ctx);
     let orbits = OrbitIter::from_ctx(ctx, &apriori);
     let ephemerides = EphemeridesIter::from_ctx(ctx);
     let iono_models = IonosphereModelIter::from_ctx(ctx);
@@ -215,6 +217,7 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
         observations,
         orbits,
         clocks,
+        sv_infos,
         iono_models,
     );
     /* save solutions (graphs, reports..) */

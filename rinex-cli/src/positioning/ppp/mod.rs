@@ -1,7 +1,7 @@
 //! PPP solver
 use crate::cli::Context;
 
-use super::{ClockIter, EphemeridesIter, IonosphereModelIter, ObservationIter, OrbitIter};
+use super::{ClockIter, EphemeridesIter, IonosphereModelIter, ObservationIter, OrbitIter, SVInfoIter};
 
 mod post_process;
 pub use post_process::{post_process, Error as PostProcessingError};
@@ -15,7 +15,8 @@ pub fn resolve(
     observations: ObservationIter,
     orbits: OrbitIter,
     clocks: ClockIter,
+    sv_infos: SVInfoIter,
     iono_models: IonosphereModelIter,
 ) -> Vec<PVTSolution> {
-    solver.resolve(ephemerides, orbits, clocks, observations, iono_models)
+    solver.resolve(ephemerides, orbits, clocks, observations, sv_infos, iono_models)
 }
