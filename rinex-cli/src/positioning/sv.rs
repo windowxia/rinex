@@ -1,10 +1,7 @@
 use crate::cli::Context;
 
 use rinex::prelude::SV;
-use rtk::prelude::{
-    SVInfo as RTKSVInfo,
-    SVInfoIter as RTKSVInfoIter,
-};
+use rtk::prelude::{SVInfo as RTKSVInfo, SVInfoIter as RTKSVInfoIter};
 
 /// Efficient info stream
 pub struct SVInfoIter<'a> {
@@ -17,10 +14,7 @@ impl<'a> SVInfoIter<'a> {
         Self {
             iter: Box::new(nav.ephemeris().filter_map(|(_, (_, sv, ephemeris))| {
                 let tgd = ephemeris.tgd()?;
-                Some(RTKSVInfo {
-                    sv,
-                    tgd,
-                })
+                Some(RTKSVInfo { sv, tgd })
             })),
         }
     }
