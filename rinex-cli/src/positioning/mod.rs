@@ -216,7 +216,6 @@ pub fn precise_positioning(ctx: &Context, matches: &ArgMatches) -> Result<(), Er
         ephemerides,
         observations,
         orbits,
-        clocks,
         sv_infos,
         iono_models,
     );

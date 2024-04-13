@@ -16,14 +16,12 @@ pub fn resolve(
     ephemerides: EphemeridesIter,
     observations: ObservationIter,
     orbits: OrbitIter,
-    clocks: ClockIter,
     sv_infos: SVInfoIter,
     iono_models: IonosphereModelIter,
 ) -> Vec<PVTSolution> {
     solver.resolve(
         ephemerides,
         orbits,
-        clocks,
         observations,
         sv_infos,
         iono_models,

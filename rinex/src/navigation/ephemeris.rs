@@ -205,6 +205,8 @@ impl Ephemeris {
             .constellation
             .timescale()
             .ok_or(Error::TimescaleIdentification(sv))?;
+        
+        let ts = TimeScale::GPST;
         //println!("V2/V3 CONTENT \"{}\" TIMESCALE {}", line, ts); //DEBUG
 
         let (epoch, _) = epoch::parse_in_timescale(date.trim(), ts)?;
