@@ -4,8 +4,8 @@ Thank you for using our toolbox and contributing to it.
 
 Before opening an issue, make sure your tools are [up to date](https://github.com/georust/rinex/releases/latest).
 
-[Follow this guideline](./application-bug-report) if you want to report a bug or are experience troubles running one of our applications.
-[Use this guideline](./dev-guideline) if you're a developer and are facing issues using one of our libraries.
+[Follow this guideline](#application-bug-report) if you want to report a bug or are experience troubles running one of our applications.
+[Use this guideline](#library-bug-report) if you're a developer and are facing issues using one of our libraries.
 
 ## Application bug report
 
