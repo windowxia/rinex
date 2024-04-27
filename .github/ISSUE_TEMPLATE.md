@@ -9,11 +9,12 @@ Before opening an issue, make sure your tools are [up to date](https://github.co
 
 ## Application bug report
 
-Copy and paste the command line so we can reproduce it on our side.   
-Use the `RUST_LOG` (environment variable) to activate the logger and provide its output,
-either in the bug report directly or as attached file (use compression at your convenience).
+Make sure you read the `--help` menu of the options you are using.  
+Copy and paste the command line so we can reproduce your example on our side.   
+Use the `RUST_LOG` environment variable to activate the logger and attach its output to your bug report, 
+either by direct copy/paste or by attaching the txt file (you can use compression at your convenience).
 
-Example:
+Example: Report a `rinex-cli` use case
 
 ```bash
 RUST_LOG=trace ./target/release/rinex-cli \
@@ -39,8 +40,7 @@ RUST_LOG=trace ./target/release/rinex-cli \
 
 Copy and paste a minimal reproducible example, so we can easily reproduce the problem on our side.
 
-
-Example:
+Example: report `Rinex` use case
 
 ```rust
 use rinex::prelude::*;
