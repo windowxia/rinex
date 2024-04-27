@@ -3724,7 +3724,7 @@ impl Rinex {
                 observations.iter().filter_map(move |(observable, data)| {
                     if observable.is_pseudorange_observable() {
                         let mut data = data.clone();
-                        if let Some(scaling) = header.scaling.get(&observable) {
+                        if let Some(scaling) = header.scaling.get(observable) {
                             data.value /= *scaling as f64;
                         }
                         Some(((*t, *flag), station, observable, data))

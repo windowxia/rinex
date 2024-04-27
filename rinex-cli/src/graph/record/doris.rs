@@ -10,7 +10,7 @@ use plotly::common::{
 use rand::Rng;
 use rinex::{carrier::Carrier, prelude::*};
 
-use crate::graph::{build_chart_epoch_axis, csv_export_timedomain, generate_markers, PlotContext};
+use crate::graph::{build_chart_epoch_axis, PlotContext};
 
 fn plot_title(observable: Observable) -> (String, String) {
     if observable.is_pseudorange_observable() {
@@ -47,11 +47,11 @@ fn plot_title(observable: Observable) -> (String, String) {
 /*
  * Plots given DORIS RINEX content
  */
-pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_export: bool) {
+pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, _csv_export: bool) {
     let mut rng = rand::thread_rng();
     let doris = ctx.data.doris().unwrap(); // infaillible
-    let header = &doris.header;
-    let record = doris.record.as_doris().unwrap(); // infaillible
+    let _header = &doris.header;
+    let _record = doris.record.as_doris().unwrap(); // infaillible
 
     // Per observable
     for observable in doris.observable().sorted() {
@@ -61,7 +61,7 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
             || observable.is_power_observable()
         {
             let obs_str = observable.to_string();
-            if obs_str.contains("1") {
+            if obs_str.contains('1') {
                 let (plot_title, y_title) = plot_title(observable.clone());
                 plot_ctx.add_timedomain_plot(&plot_title, &y_title);
                 MarkerSymbol::Circle
@@ -79,7 +79,7 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
             if *observable == Observable::Temperature {
                 let x = doris
                     .doris_temperature()
-                    .filter_map(|((t_i, _flag_i), station_i, data)| {
+                    .filter_map(|((t_i, _flag_i), station_i, _data)| {
                         if station_i == station {
                             Some(t_i)
                         } else {
@@ -89,7 +89,7 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
                     .collect::<Vec<_>>();
                 let y = doris
                     .doris_temperature()
-                    .filter_map(|((t_i, _flag_i), station_i, value)| {
+                    .filter_map(|((_t_i, _flag_i), station_i, value)| {
                         if station_i == station {
                             Some(value)
                         } else {
@@ -104,7 +104,7 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
             } else if *observable == Observable::Pressure {
                 let x = doris
                     .doris_pressure()
-                    .filter_map(|((t_i, _flag_i), station_i, data)| {
+                    .filter_map(|((t_i, _flag_i), station_i, _data)| {
                         if station_i == station {
                             Some(t_i)
                         } else {
@@ -114,7 +114,7 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
                     .collect::<Vec<_>>();
                 let y = doris
                     .doris_pressure()
-                    .filter_map(|((t_i, _flag_i), station_i, value)| {
+                    .filter_map(|((_t_i, _flag_i), station_i, value)| {
                         if station_i == station {
                             Some(value)
                         } else {
@@ -128,7 +128,7 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
             } else if *observable == Observable::HumidityRate {
                 let x = doris
                     .doris_humidity()
-                    .filter_map(|((t_i, _flag_i), station_i, data)| {
+                    .filter_map(|((t_i, _flag_i), station_i, _data)| {
                         if station_i == station {
                             Some(t_i)
                         } else {
@@ -138,7 +138,7 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
                     .collect::<Vec<_>>();
                 let y = doris
                     .doris_humidity()
-                    .filter_map(|((t_i, _flag_i), station_i, value)| {
+                    .filter_map(|((_t_i, _flag_i), station_i, value)| {
                         if station_i == station {
                             Some(value)
                         } else {
@@ -177,7 +177,7 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
             } else if observable.is_power_observable() {
                 let x = doris
                     .doris_rx_power()
-                    .filter_map(|((t_i, _flag_i), station_i, observable_i, data)| {
+                    .filter_map(|((t_i, _flag_i), station_i, observable_i, _data)| {
                         if station_i == station && observable_i == observable {
                             Some(t_i)
                         } else {
@@ -187,7 +187,7 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
                     .collect::<Vec<_>>();
                 let y = doris
                     .doris_rx_power()
-                    .filter_map(|((t_i, _flag_i), station_i, observable_i, data)| {
+                    .filter_map(|((_t_i, _flag_i), station_i, observable_i, data)| {
                         if station_i == station && observable_i == observable {
                             Some(data.value)
                         } else {
@@ -218,7 +218,7 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
             } else if observable.is_pseudorange_observable() {
                 let x = doris
                     .doris_pseudo_range()
-                    .filter_map(|((t_i, _flag_i), station_i, observable_i, data)| {
+                    .filter_map(|((t_i, _flag_i), station_i, observable_i, _data)| {
                         if station_i == station && observable_i == observable {
                             Some(t_i)
                         } else {
@@ -228,7 +228,7 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
                     .collect::<Vec<_>>();
                 let y = doris
                     .doris_pseudo_range()
-                    .filter_map(|((t_i, _flag_i), station_i, observable_i, data)| {
+                    .filter_map(|((_t_i, _flag_i), station_i, observable_i, data)| {
                         if station_i == station && observable_i == observable {
                             Some(data.value)
                         } else {
@@ -259,7 +259,7 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
             } else if observable.is_phase_observable() {
                 let x = doris
                     .doris_phase()
-                    .filter_map(|((t_i, _flag_i), station_i, observable_i, data)| {
+                    .filter_map(|((t_i, _flag_i), station_i, observable_i, _data)| {
                         if station_i == station && observable_i == observable {
                             Some(t_i)
                         } else {
@@ -269,7 +269,7 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
                     .collect::<Vec<_>>();
                 let y = doris
                     .doris_phase()
-                    .filter_map(|((t_i, _flag_i), station_i, observable_i, data)| {
+                    .filter_map(|((_t_i, _flag_i), station_i, observable_i, data)| {
                         if station_i == station && observable_i == observable {
                             Some(data.value)
                         } else {

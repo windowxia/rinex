@@ -4,7 +4,7 @@ use thiserror::Error;
 use crate::{
     domes::{Error as DomesParsingError, DOMES},
     navigation,
-    navigation::{orbits::NAV_ORBITS, FrameClass, NavMsgType},
+    navigation::{FrameClass, NavMsgType},
     observable,
     observable::Observable,
     prelude::*,
@@ -169,7 +169,7 @@ pub(crate) fn parse_sv_list(items: Vec<&str>) -> Result<Vec<SV>, gnss::sv::Parsi
 pub(crate) fn parse_domes_list(items: Vec<&str>) -> Result<Vec<DOMES>, DomesParsingError> {
     Ok(items
         .iter()
-        .filter_map(|item| Some(DOMES::from_str(item).ok()?))
+        .filter_map(|item| DOMES::from_str(item).ok())
         .collect::<Vec<_>>())
 }
 
@@ -241,7 +241,7 @@ impl TargetItem {
     }
 }
 
-use itertools::Itertools;
+
 
 impl std::str::FromStr for TargetItem {
     type Err = Error;
@@ -307,7 +307,7 @@ impl std::str::FromStr for TargetItem {
         /*
          * Stations by DOMES ID#
          */
-        } else if let Ok(_) = DOMES::from_str(items[0].trim()) {
+        } else if DOMES::from_str(items[0].trim()).is_ok() {
             Ok(Self::DOMES(parse_domes_list(items)?))
         } else {
             /* Stations by name */

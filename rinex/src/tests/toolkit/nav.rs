@@ -5,7 +5,7 @@ use crate::prelude::{Constellation, Rinex};
 pub fn check_klobuchar_models(rinex: &Rinex, tuple: &[(Constellation, KbModel)]) {
     let header = &rinex.header;
     for (constell, model) in tuple {
-        let parsed = header.ionod_corrections.get(&constell);
+        let parsed = header.ionod_corrections.get(constell);
         assert!(parsed.is_some(), "missing KB Model for {}", constell);
         let parsed = parsed.unwrap();
         let parsed = parsed.as_klobuchar().unwrap();
@@ -16,7 +16,7 @@ pub fn check_klobuchar_models(rinex: &Rinex, tuple: &[(Constellation, KbModel)])
 pub fn check_nequick_g_models(rinex: &Rinex, tuple: &[(Constellation, NgModel)]) {
     let header = &rinex.header;
     for (constell, model) in tuple {
-        let parsed = header.ionod_corrections.get(&constell);
+        let parsed = header.ionod_corrections.get(constell);
         assert!(parsed.is_some(), "missing NG Model for {}", constell);
         let parsed = parsed.unwrap();
         let parsed = parsed.as_nequick_g().unwrap();
