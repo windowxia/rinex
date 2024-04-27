@@ -1,6 +1,13 @@
 use crate::cli::Context;
 use itertools::Itertools;
-use plotly::common::{Marker, MarkerSymbol, Mode, Visible};
+use plotly::common::{
+    color::Rgb,
+    //Visible,
+    Marker,
+    MarkerSymbol,
+    Mode,
+};
+use rand::Rng;
 use rinex::{carrier::Carrier, prelude::*};
 
 use crate::graph::{build_chart_epoch_axis, csv_export_timedomain, generate_markers, PlotContext};
@@ -41,6 +48,7 @@ fn plot_title(observable: Observable) -> (String, String) {
  * Plots given DORIS RINEX content
  */
 pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_export: bool) {
+    let mut rng = rand::thread_rng();
     let doris = ctx.data.doris().unwrap(); // infaillible
     let header = &doris.header;
     let record = doris.record.as_doris().unwrap(); // infaillible
@@ -67,7 +75,7 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
         };
 
         // Per station
-        for (station_index, station) in doris.doris_stations().sorted().enumerate() {
+        for station in doris.doris_stations().sorted() {
             if *observable == Observable::Temperature {
                 let x = doris
                     .doris_temperature()
@@ -89,15 +97,9 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
                         }
                     })
                     .collect::<Vec<_>>();
+
                 let trace = build_chart_epoch_axis(&station.label, Mode::Markers, x, y)
-                    .marker(Marker::new().symbol(marker_symbol.clone()))
-                    .visible({
-                        if station_index < 3 {
-                            Visible::True
-                        } else {
-                            Visible::LegendOnly
-                        }
-                    });
+                    .marker(Marker::new().symbol(marker_symbol.clone()));
                 plot_ctx.add_trace(trace);
             } else if *observable == Observable::Pressure {
                 let x = doris
@@ -121,14 +123,7 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
                     })
                     .collect::<Vec<_>>();
                 let trace = build_chart_epoch_axis(&station.label, Mode::Markers, x, y)
-                    .marker(Marker::new().symbol(marker_symbol.clone()))
-                    .visible({
-                        if station_index < 3 {
-                            Visible::True
-                        } else {
-                            Visible::LegendOnly
-                        }
-                    });
+                    .marker(Marker::new().symbol(marker_symbol.clone()));
                 plot_ctx.add_trace(trace);
             } else if *observable == Observable::HumidityRate {
                 let x = doris
@@ -152,14 +147,7 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
                     })
                     .collect::<Vec<_>>();
                 let trace = build_chart_epoch_axis(&station.label, Mode::Markers, x, y)
-                    .marker(Marker::new().symbol(marker_symbol.clone()))
-                    .visible({
-                        if station_index < 3 {
-                            Visible::True
-                        } else {
-                            Visible::LegendOnly
-                        }
-                    });
+                    .marker(Marker::new().symbol(marker_symbol.clone()));
                 plot_ctx.add_trace(trace);
             } else if *observable == Observable::FrequencyRatio {
                 let x = doris
@@ -184,14 +172,7 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
                     .collect::<Vec<_>>();
 
                 let trace = build_chart_epoch_axis(&station.label, Mode::Markers, x, y)
-                    .marker(Marker::new().symbol(marker_symbol.clone()))
-                    .visible({
-                        if station_index < 3 {
-                            Visible::True
-                        } else {
-                            Visible::LegendOnly
-                        }
-                    });
+                    .marker(Marker::new().symbol(marker_symbol.clone()));
                 plot_ctx.add_trace(trace);
             } else if observable.is_power_observable() {
                 let x = doris
@@ -221,20 +202,18 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
                     })
                     .to_string();
 
+                let (r, g, b): (u8, u8, u8) = (rng.gen(), rng.gen(), rng.gen());
                 let trace = build_chart_epoch_axis(
                     &format!("{}({})", station.label, freq_label),
                     Mode::Markers,
                     x,
                     y,
                 )
-                .marker(Marker::new().symbol(marker_symbol.clone()))
-                .visible({
-                    if station_index < 3 {
-                        Visible::True
-                    } else {
-                        Visible::LegendOnly
-                    }
-                });
+                .marker(
+                    Marker::new()
+                        .color(Rgb::new(r, g, b))
+                        .symbol(marker_symbol.clone()),
+                );
                 plot_ctx.add_trace(trace);
             } else if observable.is_pseudorange_observable() {
                 let x = doris
@@ -264,20 +243,18 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
                     })
                     .to_string();
 
+                let (r, g, b): (u8, u8, u8) = (rng.gen(), rng.gen(), rng.gen());
                 let trace = build_chart_epoch_axis(
                     &format!("{}({})", station.label, freq_label),
                     Mode::Markers,
                     x,
                     y,
                 )
-                .marker(Marker::new().symbol(marker_symbol.clone()))
-                .visible({
-                    if station_index < 3 {
-                        Visible::True
-                    } else {
-                        Visible::LegendOnly
-                    }
-                });
+                .marker(
+                    Marker::new()
+                        .color(Rgb::new(r, g, b))
+                        .symbol(marker_symbol.clone()),
+                );
                 plot_ctx.add_trace(trace);
             } else if observable.is_phase_observable() {
                 let x = doris
@@ -307,20 +284,18 @@ pub fn plot_doris_observations(ctx: &Context, plot_ctx: &mut PlotContext, csv_ex
                     })
                     .to_string();
 
+                let (r, g, b): (u8, u8, u8) = (rng.gen(), rng.gen(), rng.gen());
                 let trace = build_chart_epoch_axis(
                     &format!("{}({})", station.label, freq_label),
                     Mode::Markers,
                     x,
                     y,
                 )
-                .marker(Marker::new().symbol(marker_symbol.clone()))
-                .visible({
-                    if station_index < 3 {
-                        Visible::True
-                    } else {
-                        Visible::LegendOnly
-                    }
-                });
+                .marker(
+                    Marker::new()
+                        .color(Rgb::new(r, g, b))
+                        .symbol(marker_symbol.clone()),
+                );
                 plot_ctx.add_trace(trace);
             }
         }

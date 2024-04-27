@@ -703,6 +703,8 @@ impl Preprocessing for Record {
             r.filter_mut(f);
         } else if let Some(r) = self.as_mut_ionex() {
             r.filter_mut(f);
+        } else if let Some(r) = self.as_mut_doris() {
+            r.filter_mut(f);
         }
     }
 }

@@ -576,6 +576,9 @@ pub fn preprocess(ctx: &mut RnxContext, cli: &Cli) {
             if let Some(ref mut inner) = ctx.clock_mut() {
                 inner.filter_mut(filter.clone());
             }
+            if let Some(ref mut inner) = ctx.doris_mut() {
+                inner.filter_mut(filter.clone());
+            }
             if let Some(ref mut inner) = ctx.sp3_mut() {
                 sp3_filter_mut(filter.clone(), inner);
             }
