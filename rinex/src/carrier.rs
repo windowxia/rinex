@@ -1,8 +1,6 @@
-//! Carrier channels and associated methods
-use crate::{Constellation, Observable};
+//! Carrier frequencies and associated methods
+use crate::prelude::{Constellation, Observable, SV};
 use thiserror::Error;
-
-use gnss::prelude::SV;
 
 lazy_static! {
     pub(crate) static ref KNOWN_CODES: Vec<&'static str> = vec![
@@ -76,12 +74,13 @@ pub enum Error {
     /// Unable to parse Carrier from given string content
     #[error("carrier::from_str(\"{0}\")")]
     ParseError(String),
-    //#[error("unable to identify glonass channel from \"{0}\"")]
-    //ParseIntError(#[from] std::num::ParseIntError),
     #[error("carrier::from_observable unrecognized \"{0}\"")]
     UnknownObservable(String),
     #[error("unknown sv system")]
     UnknownSV(SV),
+    #[cfg(feature = "doris")]
+    #[error("not a valid DORIS observable")]
+    InvalidDORIS,
 }
 
 impl std::fmt::Display for Carrier {
@@ -675,6 +674,21 @@ impl Carrier {
             },
         }
     }
+    /// Identifies DORIS Frequency channel from given observable.
+    #[cfg(feature = "doris")]
+    #[cfg_attr(docrs, doc(cfg(feature = "doris")))]
+    pub fn from_doris_observable(observable: &str) -> Result<Self, Error> {
+        if observable.len() < 2 {
+            return Err(Error::InvalidDORIS);
+        }
+        if &observable[1..2] == "1" {
+            Ok(Self::S1)
+        } else if &observable[1..2] == "2" {
+            Ok(Self::U2)
+        } else {
+            Err(Error::InvalidDORIS)
+        }
+    }
     /*
      * Build a frequency from standard SV description.
      * This is used in ATX records to identify the antenna frequency
@@ -943,6 +957,21 @@ mod test {
                     assert_eq!(Carrier::from_observable(constell, &obs), Ok(Carrier::L6),);
                 }
             }
+        }
+    }
+    #[test]
+    #[cfg(feature = "doris")]
+    fn test_doris() {
+        for (desc, expected) in [
+            ("L1", Carrier::S1),
+            ("L2", Carrier::U2),
+            ("C1", Carrier::S1),
+            ("C2", Carrier::U2),
+            ("W1", Carrier::S1),
+            ("W2", Carrier::U2),
+        ] {
+            let signal = Carrier::from_doris_observable(desc).unwrap();
+            assert_eq!(signal, expected, "failed for \"{}\"", desc);
         }
     }
 }

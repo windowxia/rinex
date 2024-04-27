@@ -11,7 +11,7 @@ use crate::{
 pub(crate) mod record;
 pub(crate) mod station;
 
-pub use record::Record;
+pub use record::{ObservationData, Record};
 pub use station::Station;
 
 /// DORIS Station & record parsing error

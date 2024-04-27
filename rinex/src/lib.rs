@@ -61,14 +61,16 @@ use std::str::FromStr;
 
 use thiserror::Error;
 
-use antex::{Antenna, AntennaSpecific, FrequencyDependentData};
-use epoch::epoch_decompose;
-use ionex::TECPlane;
-use observable::Observable;
-use observation::Crinex;
-use version::Version;
-
-use production::{DataSource, DetailedProductionAttributes, ProductionAttributes, FFU, PPU};
+use crate::{
+    antex::{Antenna, AntennaSpecific, FrequencyDependentData},
+    doris::ObservationData as DorisObservationData,
+    epoch::epoch_decompose,
+    ionex::TECPlane,
+    observable::Observable,
+    observation::Crinex,
+    production::{DataSource, DetailedProductionAttributes, ProductionAttributes, FFU, PPU},
+    version::Version,
+};
 
 use hifitime::Unit;
 //use hifitime::{efmt::Format as EpochFormat, efmt::Formatter as EpochFormatter, Duration, Unit};
@@ -81,9 +83,9 @@ pub mod prelude {
     pub use crate::clock::{ClockKey, ClockProfile, ClockProfileType, ClockType, WorkClock};
     #[cfg(feature = "sp3")]
     pub use crate::context::{ProductType, RnxContext};
-    pub use crate::domes::Domes;
+    pub use crate::domes::DOMES;
     #[cfg(feature = "doris")]
-    pub use crate::doris::Station;
+    pub use crate::doris::{ObservationData as DorisObservationData, Station};
     pub use crate::ground_position::GroundPosition;
     pub use crate::header::Header;
     pub use crate::observable::Observable;
@@ -873,17 +875,17 @@ impl Rinex {
 
     /// Returns true if this is a METEO RINEX
     pub fn is_meteo_rinex(&self) -> bool {
-        self.header.rinex_type == types::Type::MeteoData
+        self.header.rinex_type == RinexType::MeteoData
     }
 
     /// Retruns true if this is a NAV RINEX
     pub fn is_navigation_rinex(&self) -> bool {
-        self.header.rinex_type == types::Type::NavigationData
+        self.header.rinex_type == RinexType::NavigationData
     }
 
     /// Retruns true if this is an OBS RINEX
     pub fn is_observation_rinex(&self) -> bool {
-        self.header.rinex_type == types::Type::ObservationData
+        self.header.rinex_type == RinexType::ObservationData
     }
 
     /// Generates a new RINEX = Self(=RINEX(A)) - RHS(=RINEX(B)).
@@ -1542,6 +1544,25 @@ impl Rinex {
                     })
                     .into_iter(),
             )
+        } else if self.record.as_doris().is_some() {
+            Box::new(
+                self.doris()
+                    .map(|(_, stations)| {
+                        stations
+                            .iter()
+                            .flat_map(|(_station, observables)| observables.keys())
+                    })
+                    .fold(vec![], |mut list, items| {
+                        // create a unique list
+                        for item in items {
+                            if !list.contains(&item) {
+                                list.push(item);
+                            }
+                        }
+                        list
+                    })
+                    .into_iter(),
+            )
         } else if self.record.as_meteo().is_some() {
             Box::new(
                 self.meteo()
@@ -1675,6 +1696,28 @@ impl Rinex {
         Box::new(
             self.record
                 .as_nav()
+                .into_iter()
+                .flat_map(|record| record.iter()),
+        )
+    }
+    /// DORIS content iteration method.
+    /// Use this to iterate the entire DORIS record set.
+    /// You should most likely use the iteration method
+    /// of the physical data you are interested in, like [doris_phase()]
+    /// or [doris_pseudo_range()], especially because this method returns _unscaled_ values.
+    pub fn doris(
+        &self,
+    ) -> Box<
+        dyn Iterator<
+                Item = (
+                    &(Epoch, EpochFlag),
+                    &BTreeMap<Station, HashMap<Observable, DorisObservationData>>,
+                ),
+            > + '_,
+    > {
+        Box::new(
+            self.record
+                .as_doris()
                 .into_iter()
                 .flat_map(|record| record.iter()),
         )
@@ -3464,6 +3507,233 @@ impl Rinex {
                 _ => None,
             })
             .reduce(|k, _| k) // we're expecting a single match here
+    }
+}
+
+/*
+ * DORIS RINEX specific methods: only available on crate feature.
+ */
+#[cfg(feature = "doris")]
+#[cfg_attr(docrs, doc(cfg(feature = "doris")))]
+impl Rinex {
+    /// Returns a Unique Iterator over DORIS stations (ie., data provider) present in this file.
+    /// ```
+    /// TODO
+    /// ```
+    pub fn doris_stations(&self) -> Box<dyn Iterator<Item = &Station> + '_> {
+        Box::new(
+            self.header
+                .doris
+                .iter()
+                .flat_map(|doris| doris.stations.iter()),
+        )
+    }
+    /// Returns Temperature observation Iterator, as observed in chronological
+    /// order by all DORIS stations that are present.
+    /// Example: iterate over temperature observations made at station "OWENGA".
+    /// ```
+    /// TODO
+    /// ```
+    /// The DORIS Station matcher allows easy station matching, either by site label (most pratical),
+    /// or by DOMES identification code (most accurate). Here's the same example using the DOMES ID code:
+    /// ```
+    /// TODO
+    /// ```
+    pub fn doris_temperature(
+        &self,
+    ) -> Box<dyn Iterator<Item = ((Epoch, EpochFlag), &Station, f64)> + '_> {
+        Box::new(self.doris().flat_map(|((t, flag), stations)| {
+            stations.iter().flat_map(move |(station, observations)| {
+                observations.iter().filter_map(move |(observable, data)| {
+                    if *observable == Observable::Temperature {
+                        Some(((*t, *flag), station, data.value))
+                    } else {
+                        None
+                    }
+                })
+            })
+        }))
+    }
+    /// Returns Humidity saturation rate Iterator, as observed in chronological
+    /// order by all DORIS stations that are present.
+    /// Example: iterate over temperature observations made at station "OWENGA".
+    /// ```
+    /// TODO
+    /// ```
+    /// The DORIS Station matcher allows easy station matching, either by site label (most pratical),
+    /// or by DOMES identification code (most accurate). Here's the same example using the DOMES ID code:
+    /// ```
+    /// TODO
+    /// ```
+    pub fn doris_humidity(
+        &self,
+    ) -> Box<dyn Iterator<Item = ((Epoch, EpochFlag), &Station, f64)> + '_> {
+        Box::new(self.doris().flat_map(|((t, flag), stations)| {
+            stations.iter().flat_map(move |(station, observations)| {
+                observations.iter().filter_map(move |(observable, data)| {
+                    if *observable == Observable::HumidityRate {
+                        Some(((*t, *flag), station, data.value))
+                    } else {
+                        None
+                    }
+                })
+            })
+        }))
+    }
+    /// Returns Pressure Iterator, as observed in chronological
+    /// order by all DORIS stations that are present.
+    /// Example: iterate over pressure observations made at station "OWENGA".
+    /// ```
+    /// TODO
+    /// ```
+    /// The DORIS Station matcher allows easy station matching, either by site label (most pratical),
+    /// or by DOMES identification code (most accurate). Here's the same example using the DOMES ID code:
+    /// ```
+    /// TODO
+    /// ```
+    pub fn doris_pressure(
+        &self,
+    ) -> Box<dyn Iterator<Item = ((Epoch, EpochFlag), &Station, f64)> + '_> {
+        Box::new(self.doris().flat_map(|((t, flag), stations)| {
+            stations.iter().flat_map(move |(station, observations)| {
+                observations.iter().filter_map(move |(observable, data)| {
+                    if *observable == Observable::Pressure {
+                        Some(((*t, *flag), station, data.value))
+                    } else {
+                        None
+                    }
+                })
+            })
+        }))
+    }
+    /// Returns local receiver offset to its nominal frequency, expressed as correctly scaled dimension less ratio ((f(t) -f0)/f0),
+    /// as estimated in chronological order by all DORIS stations that are present.
+    /// Example: iterate over rx clock offset at station "OWENGA".
+    /// ```
+    /// TODO
+    /// ```
+    /// The DORIS Station matcher allows easy station matching, either by site label (most pratical),
+    /// or by DOMES identification code (most accurate). Here's the same example using the DOMES ID code:
+    /// ```
+    /// TODO
+    /// ```
+    pub fn doris_rx_clock_offset(
+        &self,
+    ) -> Box<dyn Iterator<Item = ((Epoch, EpochFlag), &Station, f64)> + '_> {
+        Box::new(self.doris().flat_map(|((t, flag), stations)| {
+            stations.iter().flat_map(move |(station, observations)| {
+                observations.iter().filter_map(move |(observable, data)| {
+                    if *observable == Observable::FrequencyRatio {
+                        Some(((*t, *flag), station, data.value * 1.0E-11))
+                    } else {
+                        None
+                    }
+                })
+            })
+        }))
+    }
+    /// Phase Observations are presented per [Station] (signal observer) and in chronological order.
+    ///
+    /// Example: design a DORIS S1 Phase Iterator:
+    /// ```
+    /// // TODO
+    /// ```
+    pub fn doris_phase(
+        &self,
+    ) -> Box<
+        dyn Iterator<
+                Item = (
+                    (Epoch, EpochFlag),
+                    &Station,
+                    &Observable,
+                    &DorisObservationData,
+                ),
+            > + '_,
+    > {
+        Box::new(self.doris().flat_map(|((t, flag), stations)| {
+            stations.iter().flat_map(move |(station, observations)| {
+                observations.iter().filter_map(move |(observable, data)| {
+                    if observable.is_phase_observable() {
+                        Some(((*t, *flag), station, observable, data))
+                    } else {
+                        None
+                    }
+                })
+            })
+        }))
+    }
+    /// Returns Iterator over received signal Power estimation made in chronological
+    /// order by all DORIS stations that are present. Values are expressed in [dBm].
+    /// Example: iterate over S1 frequency power estimations made at station "OWENGA".
+    /// ```
+    /// TODO
+    /// ```
+    pub fn doris_rx_power(
+        &self,
+    ) -> Box<
+        dyn Iterator<
+                Item = (
+                    (Epoch, EpochFlag),
+                    &Station,
+                    &Observable,
+                    &DorisObservationData,
+                ),
+            > + '_,
+    > {
+        Box::new(self.doris().flat_map(|((t, flag), stations)| {
+            stations.iter().flat_map(move |(station, observations)| {
+                observations.iter().filter_map(move |(observable, data)| {
+                    if observable.is_power_observable() {
+                        Some(((*t, *flag), station, observable, data))
+                    } else {
+                        None
+                    }
+                })
+            })
+        }))
+    }
+    /// Returns Pseudo Range estimations correctly scaled to [km],
+    /// made in chronological order by all DORIS stations that are present.
+    /// Most DORIS stations have a free running clock, so the pseudo range
+    /// reflects the behavior of the local clock.
+    /// Example: iterate over pseudo range observations made at station "OWENGA".
+    /// ```
+    /// TODO
+    /// ```
+    /// The DORIS Station matcher allows easy station matching, either by site label (most pratical),
+    /// or by DOMES identification code (most accurate). Here's the same example using the DOMES ID code:
+    /// ```
+    /// TODO
+    /// ```
+    pub fn doris_pseudo_range(
+        &self,
+    ) -> Box<
+        dyn Iterator<
+                Item = (
+                    (Epoch, EpochFlag),
+                    &Station,
+                    &Observable,
+                    DorisObservationData,
+                ),
+            > + '_,
+    > {
+        let header = self.header.doris.as_ref().unwrap(); // will fail on invalid DORIS RINEX
+
+        Box::new(self.doris().flat_map(move |((t, flag), stations)| {
+            stations.iter().flat_map(move |(station, observations)| {
+                observations.iter().filter_map(move |(observable, data)| {
+                    if observable.is_pseudorange_observable() {
+                        let mut data = data.clone();
+                        if let Some(scaling) = header.scaling.get(&observable) {
+                            data.value /= *scaling as f64;
+                        }
+                        Some(((*t, *flag), station, observable, data))
+                    } else {
+                        None
+                    }
+                })
+            })
+        }))
     }
 }
 

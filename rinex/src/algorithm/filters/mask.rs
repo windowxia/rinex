@@ -298,6 +298,7 @@ impl std::str::FromStr for MaskFilter {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::domes::{TrackingPoint as DomesTrackingPoint, DOMES};
     use crate::navigation::{FrameClass, NavMsgType};
     use crate::prelude::*;
     use std::str::FromStr;
@@ -471,13 +472,29 @@ mod test {
         );
     }
     #[test]
-    fn mask_orbit() {
-        let mask = MaskFilter::from_str("=iode").unwrap();
+    fn mask_station() {
+        let mask = MaskFilter::from_str("SVBC").unwrap();
         assert_eq!(
             mask,
             MaskFilter {
                 operand: MaskOperand::Equals,
-                item: TargetItem::OrbitItem(vec![String::from("iode")])
+                item: TargetItem::Station(vec![String::from("SVBC")])
+            }
+        );
+    }
+    #[test]
+    fn mask_domes() {
+        let mask = MaskFilter::from_str("40405S031").unwrap();
+        assert_eq!(
+            mask,
+            MaskFilter {
+                operand: MaskOperand::Equals,
+                item: TargetItem::DOMES(vec![DOMES {
+                    area: 404,
+                    site: 5,
+                    sequential: 31,
+                    point: DomesTrackingPoint::Instrument,
+                },]),
             }
         );
     }

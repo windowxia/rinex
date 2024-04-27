@@ -1,12 +1,16 @@
-use crate::navigation;
-use crate::navigation::{orbits::NAV_ORBITS, FrameClass, NavMsgType};
-use crate::observable;
-use crate::observable::Observable;
-use crate::prelude::*;
 use std::str::FromStr;
 use thiserror::Error;
 
-use gnss::prelude::{Constellation, SV};
+use crate::{
+    domes::{Error as DomesParsingError, DOMES},
+    navigation,
+    navigation::{orbits::NAV_ORBITS, FrameClass, NavMsgType},
+    observable,
+    observable::Observable,
+    prelude::*,
+};
+
+// use gnss::prelude::{Constellation, SV};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -38,6 +42,8 @@ pub enum Error {
     ObservableParsing(#[from] observable::ParsingError),
     #[error("invalid duration description")]
     InvalidDurationItem(#[from] hifitime::Errors),
+    #[error("invalid domes code")]
+    DomesParsing(#[from] DomesParsingError),
 }
 
 /// Target Item represents items that filters
@@ -68,6 +74,10 @@ pub enum TargetItem {
     NavMsgItem(Vec<NavMsgType>),
     /// List of Navigation Frame types
     NavFrameItem(Vec<FrameClass>),
+    /// List of DOMES station ID code
+    DOMES(Vec<DOMES>),
+    /// List of Station (label, generic name..)
+    Station(Vec<String>),
     /// (Rx) ClockItem
     ClockItem,
 }
@@ -154,6 +164,13 @@ pub(crate) fn parse_sv_list(items: Vec<&str>) -> Result<Vec<SV>, gnss::sv::Parsi
         ret.push(sv);
     }
     Ok(ret)
+}
+
+pub(crate) fn parse_domes_list(items: Vec<&str>) -> Result<Vec<DOMES>, DomesParsingError> {
+    Ok(items
+        .iter()
+        .filter_map(|item| Some(DOMES::from_str(item).ok()?))
+        .collect::<Vec<_>>())
 }
 
 pub(crate) fn parse_gnss_list(
@@ -287,34 +304,16 @@ impl std::str::FromStr for TargetItem {
             //TODO improve this:
             // do not test 1st entry only but all possible content
             Ok(Self::NavMsgItem(parse_nav_msg(items)?))
+        /*
+         * Stations by DOMES ID#
+         */
+        } else if let Ok(_) = DOMES::from_str(items[0].trim()) {
+            Ok(Self::DOMES(parse_domes_list(items)?))
         } else {
-            // try to match existing Orbit field(s).
-            // To do so, we regroup all known Orbit fields, accross all NAV revisions,
-            // and filter out non matching data fields.
-            let matched_orbits: Vec<_> = NAV_ORBITS
-                .iter()
-                .flat_map(|entry| entry.items.clone())
-                .map(|(key, _value)| key) // we're not interested in matching keys here
-                .unique()
-                .filter(|k| {
-                    let mut found = false;
-                    for item in &items {
-                        // we use a lowercase comparison
-                        // to make filter description case insensitive.
-                        // Makes filter description much easier
-                        found |= item.to_ascii_lowercase().eq(k);
-                    }
-                    found
-                })
-                .map(|s| s.to_string())
-                .collect();
-
-            if !matched_orbits.is_empty() {
-                Ok(Self::OrbitItem(matched_orbits))
-            } else {
-                // not a single match
-                Err(Error::TypeGuessing(c.to_string()))
-            }
+            /* Stations by name */
+            Ok(Self::Station(
+                items.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            ))
         }
     }
 }
@@ -405,6 +404,7 @@ impl std::fmt::Display for TargetItem {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::domes::TrackingPoint as DomesTrackingPoint;
     use crate::Observable;
     use std::str::FromStr;
     #[test]
@@ -451,33 +451,15 @@ mod test {
         let target: TargetItem = dt.into();
         assert_eq!(target, TargetItem::DurationItem(dt));
 
-        // test Matching NAV orbits
-        for descriptor in [
-            "iode",
-            "crc",
-            "crs",
-            "health",
-            "iode,crc,crs",
-            "iode, crc, crs",
-        ] {
-            let target = TargetItem::from_str(descriptor);
-            assert!(
-                target.is_ok(),
-                "failed to parse TargetItem::OrbitItem from \"{}\"",
-                descriptor
-            );
-        }
-
-        // test non matching NAV orbits
-        for descriptor in ["oide", "ble", "blah, oide"] {
-            let target = TargetItem::from_str(descriptor);
-            assert!(
-                target.is_err(),
-                "false positive on TargetItem::OrbitItem from \"{}\", parsed {:?}",
-                descriptor,
-                target,
-            );
-        }
+        assert_eq!(
+            TargetItem::from_str("40405S031").unwrap(),
+            TargetItem::DOMES(vec![DOMES {
+                area: 404,
+                site: 5,
+                sequential: 31,
+                point: DomesTrackingPoint::Instrument,
+            },])
+        );
     }
     #[test]
     fn test_from_elevation() {

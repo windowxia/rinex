@@ -152,7 +152,7 @@ mod test {
         assert_eq!(clock_header.site, Some("USNO".to_string()));
         assert_eq!(
             clock_header.domes,
-            Some(Domes {
+            Some(DOMES {
                 area: 404,
                 site: 51,
                 point: DomesTrackingPoint::Instrument,
@@ -173,7 +173,7 @@ mod test {
             vec![
                 WorkClock {
                     name: "USNO".to_string(),
-                    domes: Some(Domes {
+                    domes: Some(DOMES {
                         area: 404,
                         site: 51,
                         point: DomesTrackingPoint::Instrument,
@@ -183,7 +183,7 @@ mod test {
                 },
                 WorkClock {
                     name: "TIBD".to_string(),
-                    domes: Some(Domes {
+                    domes: Some(DOMES {
                         area: 501,
                         site: 3,
                         point: DomesTrackingPoint::Monument,
@@ -262,7 +262,7 @@ mod test {
             vec![
                 WorkClock {
                     name: "USNO".to_string(),
-                    domes: Some(Domes {
+                    domes: Some(DOMES {
                         area: 404,
                         site: 51,
                         point: DomesTrackingPoint::Instrument,
@@ -272,7 +272,7 @@ mod test {
                 },
                 WorkClock {
                     name: "TIDB".to_string(),
-                    domes: Some(Domes {
+                    domes: Some(DOMES {
                         area: 501,
                         site: 3,
                         point: DomesTrackingPoint::Monument,

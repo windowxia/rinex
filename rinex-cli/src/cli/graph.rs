@@ -8,28 +8,62 @@ pub fn subcommand() -> Command {
         .about(
             "RINEX data visualization (signals, orbits..), rendered as HTML or CSV in the workspace.",
         )
+        .long_about("This mode allows visualization of the entire dataset,
+rendered as HTML plots. When dealing with observations, whether it be
+signal (OBS RINEX), meteo or DORIS, it is possible to render as CSV file as well.")
         .arg(
             Arg::new("csv")
                 .long("csv")
                 .action(ArgAction::SetTrue)
-                .help("Generate CSV files along HTML plots.")
+                .help("Extract Data as CSV along HTML plots. See --help.")
+                .long_help("This is particularly helpful if you are interested in
+using our toolbox as data parser/extracter and inject the CSV into third party programs.")                
         )
         .next_help_heading(
             "RINEX dependent visualizations. 
         Will only generate graphs if related dataset is present.",
         )
-        .next_help_heading("GNSS observations (requires OBS RINEX)")
+        .next_help_heading("Observations rendering (OBS, Meteo, DORIS)")
         .arg(
             Arg::new("obs")
                 .short('o')
                 .long("obs")
                 .action(ArgAction::SetTrue)
-                .help(
-                    "Plot all observables.
-When OBS RINEX is provided, this will plot raw phase, dopplers and SSI.
-When METEO RINEX is provided, data from meteo sensors is plotted too.",
-                ),
+                .help("Plot all observables described in either Observation, Meteo or DORIS RINEX. See --help")
+                .long_help("Use this option to plot all observations.
+OBS RINEX gives GNSS signals observations, but we also support Meteo RINEX and DORIS (special observation) RINEX.
+
+Example (1): render GNSS signals (all of them, whether it be Phase or PR) for GPS.
+Use CSV for extract and export as well:
+
+./target/release/rinex-cli \\
+    -f test_resources/CRNX/V3/ESBC00DNK_R_20201770000_01D_30S_MO.crx.gz \\
+    -g --obs --csv
+
+Example (2): render meteo sensor observations similary.
+
+./target/release/rinex-cli \\
+    -f test_resources/MET/V3/POTS00DEU_R_20232540000_01D_05M_MM.rnx.gz \\
+    -g --obs --csv
+
+Example (3): render DORIS observations similarly.
+
+./target/release/rinex-cli \\
+    -f test_resources/MET/V3/POTS00DEU_R_20232540000_01D_05M_MM.rnx.gz \\
+    -g --obs --csv
+
+Example (4): render OBS + Meteo combination at once.
+RINEX-Cli allows loading OBS + Meteo in one session.
+In graph mode, this means we can render both in a single run.
+
+./target/release/rinex-cli \\
+    -f test_resources/CRNX/V3/ESBC00DNK_R_20201770000_01D_30S_MO.crx.gz \\
+    -f test_resources/MET/V3/POTS00DEU_R_20232540000_01D_05M_MM.rnx.gz \\
+    -g --obs --csv
+")
+
         )
+        .next_help_heading("GNSS signals (require OBS RINEX)")
         .arg(
             Arg::new("dcb")
                 .long("dcb")
@@ -42,7 +76,6 @@ When METEO RINEX is provided, data from meteo sensors is plotted too.",
                 .action(ArgAction::SetTrue)
                 .help("Plot Code Multipath. Requires OBS RINEX."),
         )
-        .next_help_heading("GNSS combinations (requires OBS RINEX)")
         .arg(
             Arg::new("if")
                 .short('i')

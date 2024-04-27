@@ -369,6 +369,14 @@ impl Mask for Record {
                         !stations.is_empty()
                     });
                 },
+                TargetItem::Station(labels) => self.retain(|_, stations| {
+                    stations.retain(|station, _| labels.contains(&station.label));
+                    !stations.is_empty()
+                }),
+                TargetItem::DOMES(domes) => self.retain(|_, stations| {
+                    stations.retain(|station, _| domes.contains(&station.domes));
+                    !stations.is_empty()
+                }),
                 _ => {}, //TODO: some other types could apply, like SNR..
             },
             MaskOperand::NotEquals => match mask.item {
@@ -383,6 +391,14 @@ impl Mask for Record {
                         !stations.is_empty()
                     });
                 },
+                TargetItem::Station(labels) => self.retain(|_, stations| {
+                    stations.retain(|station, _| !labels.contains(&station.label));
+                    !stations.is_empty()
+                }),
+                TargetItem::DOMES(domes) => self.retain(|_, stations| {
+                    stations.retain(|station, _| !domes.contains(&station.domes));
+                    !stations.is_empty()
+                }),
                 _ => {}, //TODO: some other types could apply, like SNR..
             },
             _ => {},
@@ -394,7 +410,7 @@ impl Mask for Record {
 mod test {
     use super::{is_new_epoch, parse_epoch};
     use crate::{
-        domes::Domes, domes::TrackingPoint as DomesTrackingPoint, doris::record::ObservationData,
+        domes::TrackingPoint as DomesTrackingPoint, domes::DOMES, doris::record::ObservationData,
         doris::HeaderFields as DorisHeader, doris::Station, Epoch, EpochFlag, Header, Observable,
     };
     use std::str::FromStr;
@@ -461,7 +477,7 @@ D02  -2069899.788     -407871.014     4677242.25714   4677392.20614      -119.05
             k_factor: 0,
             label: "THUB".to_string(),
             site: "THULE".to_string(),
-            domes: Domes {
+            domes: DOMES {
                 site: 1,
                 area: 430,
                 sequential: 5,
@@ -566,7 +582,7 @@ D02  -2069899.788     -407871.014     4677242.25714   4677392.20614      -119.05
             k_factor: 0,
             label: "SVBC".to_string(),
             site: "NY-ALESUND II".to_string(),
-            domes: Domes {
+            domes: DOMES {
                 site: 38,
                 area: 103,
                 sequential: 4,
