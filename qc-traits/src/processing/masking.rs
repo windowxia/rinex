@@ -1,24 +1,6 @@
-//! RINEX / GNSS data processing in general
+use super::{Error, Token};
 use gnss_rs::prelude::{Constellation, COSPAR, DOMES, SV};
 use hifitime::{Duration, Epoch};
-
-#[derive(Debug)]
-pub enum Error {
-    /// Invalid [MaskOperand] description
-    InvalidOperand,
-    /// Invalid [MaskFilter] description
-    InvalidMask,
-    /// Invalid [Epoch] description
-    InvalidEpoch,
-    /// Invalid [Duration] description
-    InvalidDuration,
-    /// Invalid Elevation Angle description
-    InvalidElevation,
-    /// Invalid Azimuth Angle description
-    InvalidAzimuth,
-    /// Invalid [Constellation] description
-    InvalidConstellation,
-}
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Default)]
 pub enum MaskOperand {
@@ -94,34 +76,6 @@ impl std::ops::Not for MaskOperand {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum Token {
-    /// Epoch
-    Epoch(Epoch),
-    /// Duration
-    Duration(Duration),
-    /// SV Elevation angle in deg°
-    Elevation(f64),
-    /// SV Azimuth angle in deg°
-    Azimuth(f64),
-    /// List of GNSS signal frequencies in [Hz]
-    Frequencies(Vec<f64>),
-    /// SNR value [dB]
-    SNR(f64),
-    /// List of Satellite Vehicles
-    SV(Vec<SV>),
-    /// LIst of Satellie Vehicles by COSPAR number
-    COSPAR(Vec<COSPAR>),
-    /// List of GNSS observables (standard RINEX codes)
-    Observables(Vec<String>),
-    /// List of GNSS Constellations
-    Constellations(Vec<Constellation>),
-    /// List of Stations by DOMES codes
-    DOMES(Vec<DOMES>),
-    /// List of Stations or Agencies by name
-    Stations(Vec<String>),
-}
-
 /// Mask filter to retain or discard data subsets
 #[derive(Debug, PartialEq)]
 pub struct MaskFilter {
@@ -137,115 +91,43 @@ impl std::str::FromStr for MaskFilter {
         if s.starts_with("dt") {
             let operand = MaskOperand::from_str(&s[2..])?;
             let offset = operand.formatted_len() + 2;
-            Ok(Self {
-                operand,
-                token: Token::Duration(
-                    Duration::from_str(&s[offset..].trim()).map_err(|_| Error::InvalidDuration)?,
-                ),
-            })
+            let token = Token::parse_duration(&s[offset..])?;
+            Ok(Self { token, operand })
         } else if s.starts_with("sta") {
             let operand = MaskOperand::from_str(&s[3..])?;
             let offset = operand.formatted_len() + 3;
-            Ok(Self {
-                operand,
-                token: Token::Stations(
-                    s[offset..]
-                        .trim()
-                        .split(',')
-                        .map(|sta| sta.trim().to_string())
-                        .collect::<Vec<_>>()
-                ),
-            })
+            let token = Token::parse_stations(&s[offset..])?;
+            Ok(Self { token, operand })
         } else if s.starts_with("dom") {
             let operand = MaskOperand::from_str(&s[3..])?;
             let offset = operand.formatted_len() + 3;
-            Ok(Self {
-                operand,
-                token: Token::DOMES(
-                    s[offset..]
-                        .trim()
-                        .split(',')
-                        .filter_map(|dom| {
-                            if let Ok(dom) = DOMES::from_str(dom.trim()) {
-                                Some(dom)
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                ),
-            })
+            let token = Token::parse_domes_sites(&s[offset..])?;
+            Ok(Self { token, operand })
         } else if s.starts_with('t') {
             let operand = MaskOperand::from_str(&s[1..])?;
             let offset = operand.formatted_len() + 1;
-            Ok(Self {
-                operand,
-                token: Token::Epoch(
-                    Epoch::from_str(&s[offset..].trim()).map_err(|_| Error::InvalidEpoch)?,
-                ),
-            })
+            let token = Token::parse_epoch(&s[offset..])?;
+            Ok(Self { token, operand })
         } else if s.starts_with('e') {
             let operand = MaskOperand::from_str(&s[1..])?;
             let offset = operand.formatted_len() + 1;
-            let elevation =
-                f64::from_str(&s[offset..].trim()).map_err(|_| Error::InvalidElevation)?;
-            if elevation < 0.0 || elevation > 90.0 {
-                return Err(Error::InvalidElevation);
-            }
-            Ok(Self {
-                operand,
-                token: Token::Elevation(elevation),
-            })
+            let token = Token::parse_elevation(&s[offset..])?;
+            Ok(Self { token, operand })
         } else if s.starts_with("az") {
             let operand = MaskOperand::from_str(&s[2..])?;
             let offset = operand.formatted_len() + 2;
-            let azimuth = f64::from_str(&s[offset..].trim()).map_err(|_| Error::InvalidAzimuth)?;
-            if azimuth < 0.0 || azimuth > 360.0 {
-                return Err(Error::InvalidAzimuth);
-            }
-            Ok(Self {
-                operand,
-                token: Token::Azimuth(azimuth),
-            })
+            let token = Token::parse_azimuth(&s[offset..])?;
+            Ok(Self { token, operand })
         } else if s.starts_with('c') {
             let operand = MaskOperand::from_str(&s[1..])?;
             let offset = operand.formatted_len() + 1;
-            let constellations = s[offset..]
-                .trim()
-                .split(',')
-                .filter_map(|c| {
-                    if let Ok(c) = Constellation::from_str(c) {
-                        Some(c)
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            if constellations.len() == 0 {
-                return Err(Error::InvalidConstellation);
-            }
-            Ok(Self {
-                operand,
-                token: Token::Constellations(constellations),
-            })
+            let token = Token::parse_constellations(&s[offset..])?;
+            Ok(Self { token, operand })
         } else if s.starts_with('f') {
             let operand = MaskOperand::from_str(&s[1..])?;
             let offset = operand.formatted_len() + 1;
-            let freqz = s[offset..]
-                .trim()
-                .split(',')
-                .filter_map(|c| {
-                    if let Ok(f) = f64::from_str(c) {
-                        Some(f)
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            Ok(Self {
-                operand,
-                token: Token::Frequencies(freqz),
-            })
+            let token = Token::parse_frequencies(&s[offset..])?;
+            Ok(Self { token, operand })
         } else if s.starts_with('o') {
             let operand = MaskOperand::from_str(&s[1..])?;
             let offset = operand.formatted_len() + 1;
@@ -264,12 +146,6 @@ impl std::str::FromStr for MaskFilter {
     }
 }
 
-/// Supported Filter types
-pub enum Filter {
-    /// Mask filter to retain or discard data subsets
-    Mask(MaskFilter),
-}
-
 /// Masking Trait, to retain or discard data subsets
 pub trait Masking {
     /// Applies [MaskFilter] returning a copied Self.
@@ -280,28 +156,12 @@ pub trait Masking {
     fn mask_mut(&mut self, mask: &MaskFilter);
 }
 
-/// Most structures need to implement the Preprocessing Trait,
-/// to rework or adapt Self prior further analysis
-pub trait Preprocessing: Masking {
-    /// Apply [Filter] to self returning a new Self.
-    /// Use [filter] to rework data set prior further analysis.
-    fn filter(&self, f: &Filter) -> Self
-    where
-        Self: Sized;
-    /// Apply [Filter] to mutable self, reworking self in place.
-    /// Use [filter_mut] to rework data set prior further analysis.
-    fn filter_mut(&mut self, f: &Filter) {
-        match f {
-            Filter::Mask(m) => self.mask_mut(m),
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use crate::processing::{MaskFilter, MaskOperand, Token};
+    use super::{MaskFilter, MaskOperand};
+    use crate::processing::Token;
+    use gnss_rs::prelude::{DomesTrackingPoint, DOMES};
     use hifitime::{Duration, Epoch};
-    use gnss_rs::prelude::{DOMES, DomesTrackingPoint};
     use std::str::FromStr;
     #[test]
     fn operand_parsing() {
@@ -449,14 +309,12 @@ mod test {
             "dom=10002M006",
             MaskFilter {
                 operand: MaskOperand::Equals,
-                token: Token::DOMES(vec![
-                    DOMES {
-                        area: 100,
-                        site: 2,
-                        sequential: 6,
-                        point: DomesTrackingPoint::Monument,
-                    }
-                ]),
+                token: Token::DOMES(vec![DOMES {
+                    area: 100,
+                    site: 2,
+                    sequential: 6,
+                    point: DomesTrackingPoint::Monument,
+                }]),
             },
         )] {
             let parsed = MaskFilter::from_str(desc).unwrap();
