@@ -106,6 +106,8 @@ pub enum Token {
     Azimuth(f64),
     /// List of GNSS signal frequencies in [Hz]
     Frequencies(Vec<f64>),
+    /// SNR value [dB]
+    SNR(f64),
     /// List of Satellite Vehicles
     SV(Vec<SV>),
     /// LIst of Satellie Vehicles by COSPAR number
@@ -139,6 +141,38 @@ impl std::str::FromStr for MaskFilter {
                 operand,
                 token: Token::Duration(
                     Duration::from_str(&s[offset..].trim()).map_err(|_| Error::InvalidDuration)?,
+                ),
+            })
+        } else if s.starts_with("sta") {
+            let operand = MaskOperand::from_str(&s[3..])?;
+            let offset = operand.formatted_len() + 3;
+            Ok(Self {
+                operand,
+                token: Token::Stations(
+                    s[offset..]
+                        .trim()
+                        .split(',')
+                        .map(|sta| sta.trim().to_string())
+                        .collect::<Vec<_>>()
+                ),
+            })
+        } else if s.starts_with("dom") {
+            let operand = MaskOperand::from_str(&s[3..])?;
+            let offset = operand.formatted_len() + 3;
+            Ok(Self {
+                operand,
+                token: Token::DOMES(
+                    s[offset..]
+                        .trim()
+                        .split(',')
+                        .filter_map(|dom| {
+                            if let Ok(dom) = DOMES::from_str(dom.trim()) {
+                                Some(dom)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>()
                 ),
             })
         } else if s.starts_with('t') {
@@ -267,6 +301,7 @@ pub trait Preprocessing: Masking {
 mod test {
     use crate::processing::{MaskFilter, MaskOperand, Token};
     use hifitime::{Duration, Epoch};
+    use gnss_rs::prelude::{DOMES, DomesTrackingPoint};
     use std::str::FromStr;
     #[test]
     fn operand_parsing() {
@@ -389,6 +424,39 @@ mod test {
             MaskFilter {
                 operand: MaskOperand::Equals,
                 token: Token::Observables(vec!["L1".to_string(), "L2".to_string()]),
+            },
+        )] {
+            let parsed = MaskFilter::from_str(desc).unwrap();
+            assert_eq!(parsed, mask, "failed to parse \"{}\"", desc);
+        }
+    }
+    #[test]
+    fn station_mask_parsing() {
+        for (desc, mask) in [(
+            "sta=ESBCDNK",
+            MaskFilter {
+                operand: MaskOperand::Equals,
+                token: Token::Stations(vec!["ESBCDNK".to_string()]),
+            },
+        )] {
+            let parsed = MaskFilter::from_str(desc).unwrap();
+            assert_eq!(parsed, mask, "failed to parse \"{}\"", desc);
+        }
+    }
+    #[test]
+    fn domes_mask_parsing() {
+        for (desc, mask) in [(
+            "dom=10002M006",
+            MaskFilter {
+                operand: MaskOperand::Equals,
+                token: Token::DOMES(vec![
+                    DOMES {
+                        area: 100,
+                        site: 2,
+                        sequential: 6,
+                        point: DomesTrackingPoint::Monument,
+                    }
+                ]),
             },
         )] {
             let parsed = MaskFilter::from_str(desc).unwrap();
