@@ -4,7 +4,7 @@ use hifitime::{Duration, Epoch};
 use std::str::FromStr;
 
 #[derive(Debug, PartialEq)]
-pub enum Token {
+pub enum MaskToken {
     /// Epoch
     Epoch(Epoch),
     /// Duration
@@ -31,7 +31,7 @@ pub enum Token {
     Stations(Vec<String>),
 }
 
-impl Token {
+impl MaskToken {
     pub fn parse_epoch(s: &str) -> Result<Self, Error> {
         Ok(Self::Epoch(
             Epoch::from_str(s.trim()).map_err(|_| Error::InvalidEpoch)?,
@@ -54,7 +54,7 @@ impl Token {
                 }
             })
             .collect::<Vec<_>>();
-        if sites.len() == 0 {
+        if sites.is_empty() {
             return Err(Error::InvalidDOMES);
         }
         Ok(Self::DOMES(sites))
@@ -69,7 +69,7 @@ impl Token {
     }
     pub fn parse_elevation(s: &str) -> Result<Self, Error> {
         let elev = f64::from_str(s.trim()).map_err(|_| Error::InvalidElevation)?;
-        if elev < 0.0 || elev > 90.0 {
+        if !(0.0..=90.0).contains(&elev) {
             Err(Error::InvalidElevation)
         } else {
             Ok(Self::Elevation(elev))
@@ -77,7 +77,7 @@ impl Token {
     }
     pub fn parse_azimuth(s: &str) -> Result<Self, Error> {
         let azim = f64::from_str(s.trim()).map_err(|_| Error::InvalidAzimuth)?;
-        if azim < 0.0 || azim > 360.0 {
+        if !(0.0..=360.0).contains(&azim) {
             Err(Error::InvalidAzimuth)
         } else {
             Ok(Self::Azimuth(azim))
@@ -94,7 +94,7 @@ impl Token {
                 }
             })
             .collect::<Vec<_>>();
-        if freqz.len() == 0 {
+        if freqz.is_empty() {
             Err(Error::InvalidFrequency)
         } else {
             Ok(Self::Frequencies(freqz))
@@ -112,7 +112,7 @@ impl Token {
                 }
             })
             .collect::<Vec<_>>();
-        if constells.len() == 0 {
+        if constells.is_empty() {
             Err(Error::InvalidConstellation)
         } else {
             Ok(Self::Constellations(constells))

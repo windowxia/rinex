@@ -45,7 +45,7 @@ doris = []
 
 # Unlock Quality Check (QC) methods and traits.
 # Allows to generate complete QC reports for RINEX or entire contexts.
-qc = ["rinex-qc-traits", "horrorshow"] 
+# qc = ["rinex-qc-traits", "horrorshow"] 
 
 # Unlock SP3 support to be able to integrate SP3 precise orbits
 # into a complete Context.
@@ -62,9 +62,9 @@ full = [
     "meteo",
     "nav",
     "obs",
-    "qc",
+    # "qc",
     "serde",
-    "sp3",
+    # "sp3",
 ]
 
 [package.metadata.docs.rs]

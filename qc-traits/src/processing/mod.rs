@@ -1,6 +1,6 @@
 //! RINEX / GNSS data processing in general
 mod token;
-pub use token::Token as MaskToken;
+pub use token::MaskToken;
 
 pub mod masking;
 pub use masking::{MaskFilter, MaskOperand, Masking};
@@ -84,7 +84,9 @@ pub trait Preprocessing: Masking + Resampling {
 
 #[cfg(test)]
 mod test {
-    use super::{DecimationFilter, Filter, ResamplingFilter, ResamplingOps};
+    use super::{Filter, ResamplingFilter};
+    use crate::processing::resampling::DecimationFilter;
+    use crate::processing::resampling::ResamplingOps;
     use crate::processing::MaskFilter;
     use crate::processing::MaskOperand;
     use crate::processing::MaskToken;
@@ -117,7 +119,7 @@ mod test {
                 "d:sta=ESBCDNK*3",
                 MaskFilter {
                     operand: MaskOperand::Equals,
-                    token: Token::Stations(vec!["ESBCDNK".to_string()]),
+                    token: MaskToken::Stations(vec!["ESBCDNK".to_string()]),
                 },
                 DecimationFilter::ByRatio(3),
             ),
@@ -125,7 +127,7 @@ mod test {
                 "d:t>2020-01-01T00:00:00 GPST*5",
                 MaskFilter {
                     operand: MaskOperand::GreaterThan,
-                    token: Token::Epoch(Epoch::from_str("2020-01-01T00:00:00 GPST").unwrap()),
+                    token: MaskToken::Epoch(Epoch::from_str("2020-01-01T00:00:00 GPST").unwrap()),
                 },
                 DecimationFilter::ByRatio(5),
             ),

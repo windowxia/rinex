@@ -3,6 +3,7 @@ use super::{epoch, prelude::*, version::Version};
 use std::collections::HashMap;
 
 pub mod record;
+pub use record::Error;
 
 pub mod flag;
 pub use flag::EpochFlag;

@@ -1,4 +1,5 @@
 use bitflags::bitflags;
+use itertools::Itertools;
 use std::collections::{
     btree_map::{Iter, IterMut},
     BTreeMap, HashMap,
@@ -7,11 +8,21 @@ use std::str::FromStr;
 use thiserror::Error;
 
 use crate::{
-    epoch, merge, merge::Merge, prelude::Duration, prelude::*, split, split::Split, types::Type,
-    version::Version, Carrier, Observable,
+    epoch::{
+        format as epoch_formatter, parse_in_timescale as parse_epoch_in_timescale,
+        parse_utc as parse_utc_epoch, ParsingError as EpochParsingError,
+    },
+    merge::{Error as MergeError, Merge},
+    observation::{flag::Error as FlagParsingError, EpochFlag, SNR},
+    prelude::{Constellation, Duration, Epoch, Header, RinexType, TimeScale, SV},
+    split::{Error as SplitError, Split},
+    version::Version,
+    Observable,
 };
 
-use crate::observation::{EpochFlag, SNR};
+use gnss::{
+    constellation::ParsingError as ConstellationParsingError, sv::ParsingError as SvParsingError,
+};
 
 #[cfg(feature = "qc")]
 use rinex_qc_traits::{MaskFilter, MaskOperand, MaskToken, Masking};
@@ -19,13 +30,13 @@ use rinex_qc_traits::{MaskFilter, MaskOperand, MaskToken, Masking};
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("failed to parse epoch flag")]
-    EpochFlag(#[from] crate::observation::flag::Error),
+    EpochFlag(#[from] FlagParsingError),
     #[error("failed to parse epoch")]
-    EpochError(#[from] epoch::ParsingError),
-    #[error("constellation parsing error")]
-    ConstellationParsing(#[from] gnss::constellation::ParsingError),
+    EpochError(#[from] EpochParsingError),
     #[error("sv parsing error")]
-    SvParsing(#[from] gnss::sv::ParsingError),
+    SvParsing(#[from] SvParsingError),
+    #[error("constellation parsing error")]
+    ConstellationParsing(#[from] ConstellationParsingError),
     #[error("line is empty")]
     EmptyLine,
     #[error("failed to parser number of SV")]
@@ -62,11 +73,12 @@ bitflags! {
 #[derive(Default, Copy, Clone, Debug, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ObservationData {
-    /// physical measurement
-    pub obs: f64,
-    /// Lock loss indicator
+    /// Actual observation.
+    /// Unit and meaning depends [Observable] used as index Key.
+    pub value: f64,
+    /// Loss of lock indication, supports bitmasking.
     pub lli: Option<LliFlags>,
-    /// Signal strength indicator
+    /// Possible SNR information
     pub snr: Option<SNR>,
 }
 
@@ -76,24 +88,23 @@ impl std::ops::Add for ObservationData {
         Self {
             lli: self.lli,
             snr: self.snr,
-            obs: self.obs + rhs.obs,
+            value: self.value + rhs.value,
         }
     }
 }
 
 impl std::ops::AddAssign for ObservationData {
     fn add_assign(&mut self, rhs: Self) {
-        self.obs += rhs.obs;
+        self.value += rhs.value;
     }
 }
 
 impl ObservationData {
-    /// Builds new ObservationData structure
-    pub fn new(obs: f64, lli: Option<LliFlags>, snr: Option<SNR>) -> ObservationData {
-        ObservationData { obs, lli, snr }
+    /// Builds new [Self]
+    pub fn new(value: f64, lli: Option<LliFlags>, snr: Option<SNR>) -> ObservationData {
+        ObservationData { value, lli, snr }
     }
-    /// Returns `true` if self is determined as `ok`.    
-    /// Self is declared `ok` if LLI and SSI flags missing.
+    /// Self is declared `ok` if no perturbations event are declared.
     /// If LLI exists:    
     ///    + LLI must match the LliFlags::OkOrUnknown flag (strictly)    
     /// if SSI exists:    
@@ -130,7 +141,7 @@ impl ObservationData {
     /// - sv_offset: sv clock offset
     /// - bias: other (optionnal..) additive biases
     pub fn pr_real_distance(&self, rcvr_offset: f64, sv_offset: f64, biases: f64) -> f64 {
-        self.obs + 299_792_458.0_f64 * (rcvr_offset - sv_offset) + biases
+        self.value + 299_792_458.0_f64 * (rcvr_offset - sv_offset) + biases
     }
 }
 
@@ -207,7 +218,7 @@ pub(crate) fn is_new_epoch(line: &str, v: Version) -> bool {
         } else {
             // SPLICE flag handling (still an Observation::flag)
             let significant = !line[0..26].trim().is_empty();
-            let epoch = epoch::parse_utc(&line[0..26]);
+            let epoch = parse_utc_epoch(&line[0..26]);
             let flag = EpochFlag::from_str(line[26..29].trim());
             if significant {
                 epoch.is_ok() && flag.is_ok()
@@ -258,7 +269,7 @@ pub(crate) fn parse_epoch(
     };
 
     let (date, rem) = line.split_at(offset);
-    let epoch = epoch::parse_in_timescale(date, ts)?;
+    let epoch = parse_epoch_in_timescale(date, ts)?;
     let (flag, rem) = rem.split_at(3);
     let flag = EpochFlag::from_str(flag.trim())?;
     let (n_sat, rem) = rem.split_at(3);
@@ -374,9 +385,7 @@ fn parse_v2_observations(
     let mut sv_ptr = 0; // svnn pointer
     let mut obs_ptr = 0; // observable pointer
     let mut sv = SV::default();
-    let mut key = ObservationKey::default();
     let mut observables: &Vec<Observable>;
-    let mut obs_data = ObservationData::default();
     let mut observations = Observations::new();
     //println!("{:?}", header_observables); // DEBUG
     //println!("\"{}\"", systems); // DEBUG
@@ -436,17 +445,15 @@ fn parse_v2_observations(
         //println!("parse_v2: \"{}\"", line); //DEBUG
         let line_width = line.len();
         if line_width < 10 {
+            // line is empty: add maximal amount of vehicles possible
             //println!("\nEMPTY LINE: \"{}\"", line); //DEBUG
-            // line is empty
-            // add maximal amount of vehicles possible
             obs_ptr += std::cmp::min(nb_max_observables, observables.len() - obs_ptr);
-            // nothing to parse
         } else {
-            // not a empty line
             //println!("\nLINE: \"{}\"", line); //DEBUG
             let nb_obs = num_integer::div_ceil(line_width, observable_width); // nb observations in this line
-                                                                              //println!("NB OBS: {}", nb_obs); //DEBUG
-                                                                              // parse all obs
+
+            //println!("NB OBS: {}", nb_obs); //DEBUG
+            // parse all obs
             for i in 0..nb_obs {
                 obs_ptr += 1;
                 if obs_ptr > observables.len() {
@@ -454,13 +461,11 @@ fn parse_v2_observations(
                     //  parsing would fail
                     break;
                 }
-                let slice: &str = match i {
-                    0 => {
-                        &line[0..std::cmp::min(17, line_width)] // manage trimmed single obs
-                    },
+                let slice = match i {
+                    0 => &line[0..std::cmp::min(17, line_width)],
                     _ => {
                         let start = i * observable_width;
-                        let end = std::cmp::min((i + 1) * observable_width, line_width); // trimmed lines
+                        let end = std::cmp::min((i + 1) * observable_width, line_width);
                         &line[start..end]
                     },
                 };
@@ -470,7 +475,7 @@ fn parse_v2_observations(
                                                                      //println!("OBS \"{}\"", obs); //DEBUG
                 let mut lli: Option<LliFlags> = None;
                 let mut snr: Option<SNR> = None;
-                if let Ok(obs) = obs.trim().parse::<f64>() {
+                if let Ok(value) = obs.trim().parse::<f64>() {
                     // parse obs
                     if slice.len() > 14 {
                         let lli_str = &slice[14..15];
@@ -490,7 +495,7 @@ fn parse_v2_observations(
                             sv,
                             observable: observables[obs_ptr - 1].clone(),
                         },
-                        ObservationData { obs, lli, snr },
+                        ObservationData { value, lli, snr },
                     );
                 } //f64::obs
             } // parsing all observations
@@ -501,9 +506,6 @@ fn parse_v2_observations(
         //println!("OBS COUNT {}", obs_ptr); //DEBUG
 
         if obs_ptr >= observables.len() {
-            // complete current vehicle
-            observations.insert(key, obs_data.clone());
-
             obs_ptr = 0;
             //identify next vehicle
             if sv_ptr >= systems.len() {
@@ -603,7 +605,7 @@ fn parse_v3_observations(
             let mut lli: Option<LliFlags> = None;
             let obs = &content[0..std::cmp::min(observable_width - 2, content_len)];
             //println!("OBS \"{}\"", obs); //DEBUG
-            if let Ok(obs) = f64::from_str(obs.trim()) {
+            if let Ok(value) = f64::from_str(obs.trim()) {
                 if content_len > observable_width - 2 {
                     let lli_str = &content[observable_width - 2..observable_width - 1];
                     if let Ok(u) = u8::from_str_radix(lli_str, 10) {
@@ -624,7 +626,7 @@ fn parse_v3_observations(
                         sv,
                         observable: observables[i].clone(),
                     },
-                    ObservationData { obs, lli, snr },
+                    ObservationData { value, lli, snr },
                 );
             }
         }
@@ -632,7 +634,7 @@ fn parse_v3_observations(
             let mut snr: Option<SNR> = None;
             let mut lli: Option<LliFlags> = None;
             let obs = &rem[0..observable_width - 2];
-            if let Ok(obs) = obs.trim().parse::<f64>() {
+            if let Ok(value) = obs.trim().parse::<f64>() {
                 if rem.len() > observable_width - 2 {
                     let lli_str = &rem[observable_width - 2..observable_width - 1];
                     if let Ok(u) = lli_str.parse::<u8>() {
@@ -650,7 +652,7 @@ fn parse_v3_observations(
                         sv,
                         observable: observables[nb_obs].clone(),
                     },
-                    ObservationData { obs, lli, snr },
+                    ObservationData { value, lli, snr },
                 );
             }
         }
@@ -660,155 +662,183 @@ fn parse_v3_observations(
 
 /// Formats one epoch according to standard definitions
 pub(crate) fn fmt_epoch(
-    epoch: Epoch,
-    flag: EpochFlag,
-    clock_offset: &Option<f64>,
-    data: &BTreeMap<SV, HashMap<Observable, ObservationData>>,
     header: &Header,
-) -> String {
+    key: &RecordKey,
+    entry: &RecordEntry,
+) -> Result<String, Error> {
     if header.version.major < 3 {
-        fmt_epoch_v2(epoch, flag, clock_offset, data, header)
+        fmt_epoch_v2(header, key, entry)
     } else {
-        fmt_epoch_v3(epoch, flag, clock_offset, data, header)
+        fmt_epoch_v3(header, key, entry)
     }
 }
 
-fn fmt_epoch_v3(
-    epoch: Epoch,
-    flag: EpochFlag,
-    clock_offset: &Option<f64>,
-    data: &BTreeMap<SV, HashMap<Observable, ObservationData>>,
-    header: &Header,
-) -> String {
+fn fmt_epoch_v3(header: &Header, key: &RecordKey, entry: &RecordEntry) -> Result<String, Error> {
     let mut lines = String::with_capacity(128);
+
+    let (epoch, flag) = (key.epoch, key.flag);
+    let clock_offset = entry.clock_offset;
+    let observations = &entry.observations;
     let observables = &header.obs.as_ref().unwrap().codes;
+
+    let unique_sv = observations
+        .iter()
+        .map(|(k, _)| k.sv)
+        .sorted()
+        .unique()
+        .collect::<Vec<_>>();
 
     lines.push_str(&format!(
         "> {}  {} {:2}",
-        epoch::format(epoch, Type::ObservationData, 3),
+        epoch_formatter(epoch, RinexType::ObservationData, 3),
         flag,
-        data.len()
+        unique_sv.len(),
     ));
 
     if let Some(data) = clock_offset {
         lines.push_str(&format!("{:13.4}", data));
     }
-
     lines.push('\n');
-    for (sv, data) in data.iter() {
+
+    for sv in unique_sv {
         lines.push_str(&format!("{:x}", sv));
-        let observables = match sv.constellation.is_sbas() {
-            true => observables.get(&Constellation::SBAS),
-            false => observables.get(&sv.constellation),
+
+        // determine observation table
+        let observables = if sv.constellation.is_sbas() {
+            observables.get(&Constellation::SBAS)
+        } else {
+            observables.get(&sv.constellation)
         };
-        if let Some(observables) = observables {
-            for observable in observables {
-                if let Some(observation) = data.get(observable) {
-                    lines.push_str(&format!("{:14.3}", observation.obs));
-                    if let Some(flag) = observation.lli {
-                        lines.push_str(&format!("{}", flag.bits()));
-                    } else {
-                        lines.push(' ');
-                    }
-                    if let Some(flag) = observation.snr {
-                        lines.push_str(&format!("{:x}", flag));
-                    } else {
-                        lines.push(' ');
-                    }
+
+        let observables = match observables {
+            Some(observables) => observables,
+            None => {
+                return Err(Error::MissingObservationDescription);
+            },
+        };
+
+        for observable in observables {
+            if let Some(obs_data) = observations.get(&ObservationKey {
+                sv,
+                observable: observable.clone(),
+            }) {
+                lines.push_str(&format!("{:14.3}", obs_data.value));
+
+                if let Some(flag) = obs_data.lli {
+                    lines.push_str(&format!("{}", flag.bits()));
                 } else {
-                    lines.push_str("                ");
+                    lines.push(' ');
                 }
+
+                if let Some(flag) = obs_data.snr {
+                    lines.push_str(&format!("{:x}", flag));
+                } else {
+                    lines.push(' ');
+                }
+            } else {
+                // missing observations are blanked
+                lines.push_str("                ");
             }
         }
         lines.push('\n');
     }
     lines.truncate(lines.trim_end().len());
-    lines
+    Ok(lines)
 }
 
-fn fmt_epoch_v2(
-    epoch: Epoch,
-    flag: EpochFlag,
-    clock_offset: &Option<f64>,
-    data: &BTreeMap<SV, HashMap<Observable, ObservationData>>,
-    header: &Header,
-) -> String {
+fn fmt_epoch_v2(header: &Header, key: &RecordKey, entry: &RecordEntry) -> Result<String, Error> {
     let mut lines = String::with_capacity(128);
+
+    let (epoch, flag) = (key.epoch, key.flag);
+    let clock_offset = entry.clock_offset;
+    let observations = &entry.observations;
     let observables = &header.obs.as_ref().unwrap().codes;
 
+    let unique_sv = observations
+        .iter()
+        .map(|(k, _)| k.sv)
+        .sorted()
+        .unique()
+        .collect::<Vec<_>>();
+
+    // format first line: starts with Epoch
     lines.push_str(&format!(
         " {}  {} {:2}",
-        epoch::format(epoch, Type::ObservationData, 2),
+        epoch_formatter(epoch, RinexType::ObservationData, 2),
         flag,
-        data.len()
+        unique_sv.len(),
     ));
 
-    let mut index = 0_u8;
-    for (sv_index, (sv, _)) in data.iter().enumerate() {
-        if index == 12 {
-            index = 0;
-            if sv_index == 12 {
-                // first line
-                if let Some(data) = clock_offset {
-                    // push clock offsets
-                    lines.push_str(&format!(" {:9.1}", data));
+    for (index, sv) in unique_sv.iter().enumerate() {
+        if index % 12 == 0 {
+            if index == 12 {
+                // clock offset on first time
+                if let Some(clk) = clock_offset {
+                    lines.push_str(&format!(" {:9.1}", clk));
                 }
             }
+            // tab
             lines.push_str("\n                                ");
         }
         lines.push_str(&format!("{:x}", sv));
-        index += 1;
     }
-    let obs_per_line = 5;
-    // for each vehicle per epoch
-    for (sv, observations) in data.iter() {
-        // follow list of observables, as described in header section
-        // for given constellation
-        let observables = match sv.constellation.is_sbas() {
-            true => observables.get(&Constellation::SBAS),
-            false => observables.get(&sv.constellation),
+
+    for sv in unique_sv {
+        // retrieve observables table
+        let observables = if sv.constellation.is_sbas() {
+            observables.get(&Constellation::SBAS)
+        } else {
+            observables.get(&sv.constellation)
         };
-        if let Some(observables) = observables {
-            for (obs_index, observable) in observables.iter().enumerate() {
-                if obs_index % obs_per_line == 0 {
-                    lines.push('\n');
-                }
-                if let Some(observation) = observations.get(observable) {
-                    let formatted_obs = format!("{:14.3}", observation.obs);
-                    let formatted_flags: String = match observation.lli {
-                        Some(lli) => match observation.snr {
-                            Some(snr) => format!("{}{:x}", lli.bits(), snr),
-                            _ => format!("{} ", lli.bits()),
-                        },
-                        _ => match observation.snr {
-                            Some(snr) => format!(" {:x}", snr),
-                            _ => "  ".to_string(),
-                        },
-                    };
-                    lines.push_str(&formatted_obs);
-                    lines.push_str(&formatted_flags);
+
+        let observables = match observables {
+            Some(observables) => observables,
+            None => {
+                return Err(Error::MissingObservationDescription);
+            },
+        };
+
+        for (obs_index, observable) in observables.iter().enumerate() {
+            if obs_index % 5 == 0 {
+                lines.push('\n');
+            }
+            if let Some(obs_data) = observations.get(&ObservationKey {
+                sv,
+                observable: observable.clone(),
+            }) {
+                lines.push_str(&format!("{:14.3}", obs_data.value));
+                if let Some(flag) = obs_data.lli {
+                    lines.push_str(&format!("{:x}", flag.bits()));
                 } else {
-                    // --> data is not provided: BLANK
-                    lines.push_str("                ");
+                    lines.push(' ');
                 }
+                if let Some(snr) = obs_data.snr {
+                    lines.push_str(&format!("{:x}", snr));
+                } else {
+                    lines.push(' ');
+                }
+            } else {
+                // missing observations are blanked
+                lines.push_str("                ");
             }
         }
     }
-    lines
+    lines.truncate(lines.trim_end().len());
+    Ok(lines)
 }
 
 impl Merge for Record {
     /// Merge `rhs` into `Self`
-    fn merge(&self, rhs: &Self) -> Result<Self, merge::Error> {
+    fn merge(&self, rhs: &Self) -> Result<Self, MergeError> {
         let mut lhs = self.clone();
         lhs.merge_mut(rhs)?;
         Ok(lhs)
     }
     /// Merge `rhs` into `Self`
-    fn merge_mut(&mut self, rhs: &Self) -> Result<(), merge::Error> {
+    fn merge_mut(&mut self, rhs: &Self) -> Result<(), MergeError> {
         for (rhs_k, rhs_v) in rhs.iter() {
             if let Some(lhs_v) = self.get_mut(&rhs_k) {
-                for (rhs_k, rhs_v) in rhs_v.observations {}
+                for (rhs_k, rhs_v) in rhs_v.observations.iter() {}
             } else {
                 // Declare new Epoch
                 self.insert(rhs_k.clone(), rhs_v.clone());
@@ -819,12 +849,12 @@ impl Merge for Record {
 }
 
 impl Split for Record {
-    fn split(&self, epoch: Epoch) -> Result<(Self, Self), split::Error> {
+    fn split(&self, epoch: Epoch) -> Result<(Self, Self), SplitError> {
         let r0 = self
             .iter()
             .flat_map(|(k, v)| {
                 if k.epoch < epoch {
-                    Some((*k, v.clone()))
+                    Some((k.clone(), v.clone()))
                 } else {
                     None
                 }
@@ -834,7 +864,7 @@ impl Split for Record {
             .iter()
             .flat_map(|(k, v)| {
                 if k.epoch >= epoch {
-                    Some((*k, v.clone()))
+                    Some((k.clone(), v.clone()))
                 } else {
                     None
                 }
@@ -842,7 +872,7 @@ impl Split for Record {
             .collect();
         Ok((Self { inner: r0 }, Self { inner: r1 }))
     }
-    fn split_dt(&self, duration: Duration) -> Result<Vec<Self>, split::Error> {
+    fn split_dt(&self, duration: Duration) -> Result<Vec<Self>, SplitError> {
         let mut curr = Self::new();
         let mut ret: Vec<Self> = Vec::new();
         let mut prev: Option<Epoch> = None;
@@ -944,15 +974,15 @@ impl Masking for Record {
         s
     }
     fn mask_mut(&mut self, mask: &MaskFilter) {
-        match mask.token {
+        match &mask.token {
             MaskToken::Epoch(t) => {
                 self.retain(|k, _| match mask.operand {
-                    MaskOperand::Equals => k.epoch == t,
-                    MaskOperand::NotEquals => k.epoch != t,
-                    MaskOperand::GreaterThan => k.epoch > t,
-                    MaskOperand::GreaterEquals => k.epoch >= t,
-                    MaskOperand::LowerThan => k.epoch < t,
-                    MaskOperand::LowerEquals => k.epoch <= t,
+                    MaskOperand::Equals => k.epoch == *t,
+                    MaskOperand::NotEquals => k.epoch != *t,
+                    MaskOperand::GreaterThan => k.epoch > *t,
+                    MaskOperand::GreaterEquals => k.epoch >= *t,
+                    MaskOperand::LowerThan => k.epoch < *t,
+                    MaskOperand::LowerEquals => k.epoch <= *t,
                 });
             },
             MaskToken::Duration(dt) => {},
@@ -963,12 +993,12 @@ impl Masking for Record {
                         if let Some(snr_i) = v.snr {
                             let snr_db: f64 = snr_i.into();
                             match mask.operand {
-                                MaskOperand::Equals => snr_db == snr,
-                                MaskOperand::NotEquals => snr_db != snr,
-                                MaskOperand::GreaterThan => snr_db > snr,
-                                MaskOperand::GreaterThan => snr_db > snr,
-                                MaskOperand::LowerThan => snr_db < snr,
-                                MaskOperand::LowerEquals => snr_db <= snr,
+                                MaskOperand::Equals => snr_db == *snr,
+                                MaskOperand::NotEquals => snr_db != *snr,
+                                MaskOperand::GreaterThan => snr_db > *snr,
+                                MaskOperand::GreaterEquals => snr_db >= *snr,
+                                MaskOperand::LowerThan => snr_db < *snr,
+                                MaskOperand::LowerEquals => snr_db <= *snr,
                             }
                         } else {
                             false
@@ -1080,7 +1110,7 @@ impl Masking for Record {
             MaskToken::Constellations(constells) => {
                 let mut broad_sbas_filter = false;
                 for c in constells {
-                    broad_sbas_filter |= c == Constellation::SBAS;
+                    broad_sbas_filter |= *c == Constellation::SBAS;
                 }
                 self.retain(|_, v| {
                     v.observations.retain(|k, _| {
@@ -1115,221 +1145,6 @@ impl Masking for Record {
             MaskToken::Elevation(_) => {},
             MaskToken::Azimuth(_) => {},
         }
-    }
-}
-
-/*
- * Decimates only a given record subset
- */
-#[cfg(feature = "processing")]
-fn decimate_data_subset(record: &mut Record, subset: &Record, target: &TargetItem) {
-    match target {
-        TargetItem::ClockItem => {
-            /*
-             * Remove clock fields from self
-             * where it should now be missing
-             */
-            for (epoch, (clk, _)) in record.iter_mut() {
-                if subset.get(epoch).is_none() {
-                    // should be missing
-                    *clk = None; // now missing
-                }
-            }
-        },
-        TargetItem::SvItem(svs) => {
-            /*
-             * Remove SV observations where it should now be missing
-             */
-            for (epoch, (_, vehicles)) in record.iter_mut() {
-                if subset.get(epoch).is_none() {
-                    // should be missing
-                    for sv in svs.iter() {
-                        vehicles.remove(sv); // now missing
-                    }
-                }
-            }
-        },
-        TargetItem::ObservableItem(obs_list) => {
-            /*
-             * Remove given observations where it should now be missing
-             */
-            for (epoch, (_, vehicles)) in record.iter_mut() {
-                if subset.get(epoch).is_none() {
-                    // should be missing
-                    for (_sv, observables) in vehicles.iter_mut() {
-                        observables.retain(|observable, _| !obs_list.contains(observable));
-                    }
-                }
-            }
-        },
-        TargetItem::ConstellationItem(constells_list) => {
-            /*
-             * Remove observations for given constellation(s) where it should now be missing
-             */
-            for (epoch, (_, vehicles)) in record.iter_mut() {
-                if subset.get(epoch).is_none() {
-                    // should be missing
-                    vehicles.retain(|sv, _| {
-                        let mut contained = false;
-                        for constell in constells_list.iter() {
-                            if sv.constellation == *constell {
-                                contained = true;
-                                break;
-                            }
-                        }
-                        !contained
-                    });
-                }
-            }
-        },
-        TargetItem::SNRItem(_) => unimplemented!("decimate_data_subset::snr"),
-        _ => {},
-    }
-}
-
-#[cfg(feature = "processing")]
-impl Preprocessing for Record {
-    fn filter(&self, filter: Filter) -> Self {
-        let mut s = self.clone();
-        s.filter_mut(filter);
-        s
-    }
-    fn filter_mut(&mut self, filter: Filter) {
-        match filter {
-            Filter::Mask(mask) => self.mask_mut(mask),
-            Filter::Smoothing(filter) => match filter.stype {
-                SmoothingType::Hatch => {
-                    if filter.target.is_none() {
-                        self.hatch_smoothing_mut();
-                        return; // no need to proceed further
-                    }
-
-                    let item = filter.target.unwrap();
-
-                    // apply mask to retain desired subset
-                    let mask = MaskFilter {
-                        item: item.clone(),
-                        operand: MaskOperand::Equals,
-                    };
-
-                    // apply smoothing
-                    let mut subset = self.mask(mask);
-                    subset.hatch_smoothing_mut();
-                    // overwrite targetted content
-                    let _ = self.merge_mut(&subset); // cannot fail here (record types match)
-                },
-                SmoothingType::MovingAverage(dt) => {
-                    if filter.target.is_none() {
-                        self.moving_average_mut(dt);
-                        return; // no need to proceed further
-                    }
-
-                    let item = filter.target.unwrap();
-
-                    // apply mask to retain desired subset
-                    let mask = MaskFilter {
-                        item: item.clone(),
-                        operand: MaskOperand::Equals,
-                    };
-
-                    // apply smoothing
-                    let mut subset = self.mask(mask);
-                    subset.moving_average_mut(dt);
-                    // overwrite targetted content
-                    let _ = self.merge_mut(&subset); // cannot fail here (record types match)
-                },
-            },
-            Filter::Interp(filter) => self.interpolate_mut(filter.series),
-            Filter::Decimation(filter) => match filter.dtype {
-                DecimationType::DecimByRatio(r) => {
-                    if filter.target.is_none() {
-                        self.decimate_by_ratio_mut(r);
-                        return; // no need to proceed further
-                    }
-
-                    let item = filter.target.unwrap();
-
-                    // apply mask to retain desired subset
-                    let mask = MaskFilter {
-                        item: item.clone(),
-                        operand: MaskOperand::Equals,
-                    };
-
-                    // and decimate
-                    let subset = self.mask(mask).decimate_by_ratio(r);
-
-                    // adapt self's subset to new data rates
-                    decimate_data_subset(self, &subset, &item);
-                },
-                DecimationType::DecimByInterval(dt) => {
-                    if filter.target.is_none() {
-                        self.decimate_by_interval_mut(dt);
-                        return; // no need to proceed further
-                    }
-
-                    let item = filter.target.unwrap();
-
-                    // apply mask to retain desired subset
-                    let mask = MaskFilter {
-                        item: item.clone(),
-                        operand: MaskOperand::Equals,
-                    };
-
-                    // and decimate
-                    let subset = self.mask(mask).decimate_by_interval(dt);
-
-                    // adapt self's subset to new data rates
-                    decimate_data_subset(self, &subset, &item);
-                },
-            },
-        }
-    }
-}
-
-#[cfg(feature = "processing")]
-impl Decimate for Record {
-    fn decimate_by_ratio_mut(&mut self, r: u32) {
-        let mut i = 0;
-        self.retain(|_, _| {
-            let retained = (i % r) == 0;
-            i += 1;
-            retained
-        });
-    }
-    fn decimate_by_ratio(&self, r: u32) -> Self {
-        let mut s = self.clone();
-        s.decimate_by_ratio_mut(r);
-        s
-    }
-    fn decimate_by_interval_mut(&mut self, interval: Duration) {
-        let mut last_retained = Option::<Epoch>::None;
-        self.retain(|(e, _), _| {
-            if let Some(last) = last_retained {
-                let dt = *e - last;
-                if dt >= interval {
-                    last_retained = Some(*e);
-                    true
-                } else {
-                    false
-                }
-            } else {
-                last_retained = Some(*e);
-                true // always retain 1st epoch
-            }
-        });
-    }
-    fn decimate_by_interval(&self, interval: Duration) -> Self {
-        let mut s = self.clone();
-        s.decimate_by_interval_mut(interval);
-        s
-    }
-    fn decimate_match_mut(&mut self, rhs: &Self) {
-        self.retain(|e, _| rhs.get(e).is_some());
-    }
-    fn decimate_match(&self, rhs: &Self) -> Self {
-        let mut s = self.clone();
-        s.decimate_match_mut(rhs);
-        s
     }
 }
 
@@ -1737,24 +1552,31 @@ impl Decimate for Record {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::observation::HeaderFields;
     fn parse_and_format_helper(ver: Version, epoch_str: &str, expected_flag: EpochFlag) {
         let first = epoch::parse_utc("2020 01 01 00 00  0.1000000").unwrap();
         let data: BTreeMap<SV, HashMap<Observable, ObservationData>> = BTreeMap::new();
-        let header = Header::default().with_version(ver).with_observation_fields(
-            crate::observation::HeaderFields::default().with_time_of_first_obs(first),
-        );
+        let obs_header = HeaderFields::default().with_time_of_first_obs(first);
+
+        let header = Header::default()
+            .with_version(ver)
+            .with_observation_fields(obs_header);
+
         let ts = TimeScale::UTC;
         let clock_offset: Option<f64> = None;
 
-        let e = parse_epoch(&header, epoch_str, ts);
+        let content = parse_epoch(&header, epoch_str, ts);
+        assert!(content.is_ok(), "failed to parse \"{}\"", epoch_str);
+
+        let (key, entry) = content.unwrap();
 
         match expected_flag {
             EpochFlag::Ok | EpochFlag::PowerFailure | EpochFlag::CycleSlip => {
-                assert!(e.is_ok())
+                assert!(key.flag.is_ok())
             },
             _ => {
                 // TODO: Update alongside parse_event
-                assert!(e.is_err());
+                assert!(key.flag.is_err());
                 return;
             },
         }

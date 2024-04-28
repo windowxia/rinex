@@ -13,8 +13,6 @@ mod doris;
 mod filename;
 #[cfg(feature = "ionex")]
 mod ionex;
-#[cfg(feature = "processing")]
-mod masking;
 mod merge;
 #[cfg(feature = "meteo")]
 mod meteo;
@@ -22,5 +20,5 @@ mod nav;
 mod obs;
 mod parsing;
 mod production;
-mod sampling;
-mod smoothing;
+#[cfg(feature = "qc")]
+mod qc;

@@ -18,9 +18,9 @@ pub struct QcSamplingAnalysis {
     pub dominant_sample_rate: Option<Duration>,
     /// Unusual data gaps
     pub gaps: Vec<(Epoch, Duration)>,
-    /// Epoch anomalies such as
-    /// possible receiver loss of lock, bad conditions..
-    pub anomalies: Vec<(Epoch, EpochFlag)>,
+    // /// Epoch anomalies such as
+    // /// possible receiver loss of lock, bad conditions..
+    // pub anomalies: Vec<(Epoch, EpochFlag)>,
 }
 
 impl QcSamplingAnalysis {
@@ -32,7 +32,7 @@ impl QcSamplingAnalysis {
             sample_rate: rnx.sample_rate(),
             dominant_sample_rate: rnx.dominant_sample_rate(),
             gaps: rnx.data_gaps(opts.gap_tolerance).collect(),
-            anomalies: rnx.epoch_anomalies().collect(),
+            // anomalies: rnx.epoch_anomalies().collect(),
         }
     }
 }

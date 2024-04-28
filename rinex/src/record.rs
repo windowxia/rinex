@@ -10,13 +10,14 @@ use rinex_qc_traits::{MaskFilter, Masking};
 
 use super::{
     antex, clock,
-    clock::{ClockKey, ClockProfile},
+    clock::{ClockKey, ClockProfile, Error as ClockError},
     hatanaka::{Compressor, Decompressor},
     header, ionex, is_rinex_comment, merge,
     merge::Merge,
-    meteo, navigation, observation,
+    meteo,
+    navigation::Error as NavigationError,
+    observation::Error as ObservationError,
     reader::BufferedReader,
-    split,
     split::Split,
     types::Type,
     writer::BufferedWriter,
@@ -166,25 +167,24 @@ impl Record {
                 let record = self.as_obs().unwrap();
                 let obs_fields = &header.obs.as_ref().unwrap();
                 let mut compressor = Compressor::default();
-                for (k, v) in record.iter() {
-                    //    let epoch =
-                    //        observation::record::fmt_epoch(*epoch, *flag, clock_offset, data, header);
-                    //    if obs_fields.crinex.is_some() {
-                    //        let major = header.version.major;
-                    //        let constell = &header.constellation.as_ref().unwrap();
-                    //        for line in epoch.lines() {
-                    //            let line = line.to_owned() + "\n"; // helps the following .lines() iterator
-                    //                                               // embedded in compression method
-                    //            if let Ok(compressed) =
-                    //                compressor.compress(major, &obs_fields.codes, constell, &line)
-                    //            {
-                    //                // println!("compressed \"{}\"", compressed); // DEBUG
-                    //                writeln!(writer, "{}", compressed)?;
-                    //            }
-                    //        }
-                    //    } else {
-                    //        writeln!(writer, "{}", epoch)?;
-                    //    }
+                for (key, entry) in record.iter() {
+                    let epoch = observation::record::fmt_epoch(header, key, entry)?;
+                    if obs_fields.crinex.is_some() {
+                        let major = header.version.major;
+                        let constell = &header.constellation.as_ref().unwrap();
+                        for line in epoch.lines() {
+                            let line = line.to_owned() + "\n"; // helps the following .lines() iterator
+                                                               // embedded in compression method
+                            if let Ok(compressed) =
+                                compressor.compress(major, &obs_fields.codes, constell, &line)
+                            {
+                                // println!("compressed \"{}\"", compressed); // DEBUG
+                                writeln!(writer, "{}", compressed)?;
+                            }
+                        }
+                    } else {
+                        writeln!(writer, "{}", epoch)?;
+                    }
                 }
             },
             Type::NavigationData => {
@@ -258,10 +258,12 @@ pub enum Error {
     TypeError(String),
     #[error("file i/o error")]
     FileIoError(#[from] std::io::Error),
-    #[error("failed to produce Navigation epoch")]
-    NavEpochError(#[from] navigation::Error),
-    #[error("failed to produce Clock epoch")]
-    ClockEpochError(#[from] clock::Error),
+    #[error("failed to format Navigation epoch")]
+    NavEpochFormat(#[from] NavigationError),
+    #[error("failed to format Observation epoch")]
+    ObsEpochFormat(#[from] ObservationError),
+    #[error("failed to format Clock epoch")]
+    ClockEpochFormat(#[from] ClockError),
     #[error("missing TIME OF FIRST OBS")]
     BadObservationDataDefinition,
     #[error("failed to identify timescale")]

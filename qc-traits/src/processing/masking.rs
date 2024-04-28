@@ -20,12 +20,12 @@ pub enum MaskOperand {
 impl std::fmt::Display for MaskOperand {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::Equals => write!(f, "{}", '='),
-            Self::GreaterThan => write!(f, "{}", '>'),
-            Self::LowerThan => write!(f, "{}", '<'),
-            Self::NotEquals => write!(f, "{}", "!="),
-            Self::GreaterEquals => write!(f, "{}", ">="),
-            Self::LowerEquals => write!(f, "{}", "<="),
+            Self::Equals => write!(f, "="),
+            Self::GreaterThan => write!(f, ">"),
+            Self::LowerThan => write!(f, "<"),
+            Self::NotEquals => write!(f, "!="),
+            Self::GreaterEquals => write!(f, ">="),
+            Self::LowerEquals => write!(f, "<="),
         }
     }
 }
@@ -251,59 +251,64 @@ mod test {
     }
     #[test]
     fn elevation_mask_parsing() {
-        for (desc, mask) in [(
+        {
+            let (desc, mask) = (
             "e> 30",
             MaskFilter {
                 operand: MaskOperand::GreaterThan,
                 token: MaskToken::Elevation(30.0),
             },
-        )] {
+        );
             let parsed = MaskFilter::from_str(desc).unwrap();
             assert_eq!(parsed, mask, "failed to parse \"{}\"", desc);
         }
     }
     #[test]
     fn azimuth_mask_parsing() {
-        for (desc, mask) in [(
+        {
+            let (desc, mask) = (
             "az< 10",
             MaskFilter {
                 operand: MaskOperand::LowerThan,
                 token: MaskToken::Azimuth(10.0),
             },
-        )] {
+        );
             let parsed = MaskFilter::from_str(desc).unwrap();
             assert_eq!(parsed, mask, "failed to parse \"{}\"", desc);
         }
     }
     #[test]
     fn observable_mask_parsing() {
-        for (desc, mask) in [(
+        {
+            let (desc, mask) = (
             "o=L1,L2",
             MaskFilter {
                 operand: MaskOperand::Equals,
                 token: MaskToken::Observables(vec!["L1".to_string(), "L2".to_string()]),
             },
-        )] {
+        );
             let parsed = MaskFilter::from_str(desc).unwrap();
             assert_eq!(parsed, mask, "failed to parse \"{}\"", desc);
         }
     }
     #[test]
     fn station_mask_parsing() {
-        for (desc, mask) in [(
+        {
+            let (desc, mask) = (
             "sta=ESBCDNK",
             MaskFilter {
                 operand: MaskOperand::Equals,
                 token: MaskToken::Stations(vec!["ESBCDNK".to_string()]),
             },
-        )] {
+        );
             let parsed = MaskFilter::from_str(desc).unwrap();
             assert_eq!(parsed, mask, "failed to parse \"{}\"", desc);
         }
     }
     #[test]
     fn domes_mask_parsing() {
-        for (desc, mask) in [(
+        {
+            let (desc, mask) = (
             "dom=10002M006",
             MaskFilter {
                 operand: MaskOperand::Equals,
@@ -314,7 +319,7 @@ mod test {
                     point: DomesTrackingPoint::Monument,
                 }]),
             },
-        )] {
+        );
             let parsed = MaskFilter::from_str(desc).unwrap();
             assert_eq!(parsed, mask, "failed to parse \"{}\"", desc);
         }

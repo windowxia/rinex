@@ -1,16 +1,13 @@
 #[cfg(test)]
 mod test {
-    use crate::filter;
-    use crate::marker::MarkerType;
-    use crate::observable;
-    use crate::observation::SNR;
-    use crate::preprocessing::*;
-    use crate::tests::toolkit::obsrinex_check_observables;
-    use crate::tests::toolkit::test_observation_rinex;
-    use crate::{erratic_time_frame, evenly_spaced_time_frame, tests::toolkit::TestTimeFrame};
-    use crate::{observation::*, prelude::*};
-    use gnss_rs::prelude::SV;
-    use gnss_rs::sv;
+    use crate::{
+        erratic_time_frame, evenly_spaced_time_frame,
+        macros::sv,
+        marker::MarkerType,
+        observation::SNR,
+        prelude::{Epoch, SV},
+        tests::toolkit::{obsrinex_check_observables, test_observation_rinex, TestTimeFrame},
+    };
     use itertools::Itertools;
     use std::path::Path;
     use std::str::FromStr;

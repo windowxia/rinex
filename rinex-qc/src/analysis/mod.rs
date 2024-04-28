@@ -5,8 +5,8 @@ use rinex_qc_traits::HtmlReport; //table_lengthy_td
 
 mod sv;
 
-mod obs;
-use obs::QcObsAnalysis;
+// mod obs;
+// use obs::QcObsAnalysis;
 
 mod sampling;
 
@@ -24,10 +24,10 @@ pub struct QcAnalysis {
     ///  - identifies, PRN# versus time
     ///  - Rise and Fall datetime, etc..
     sv: QcSvAnalysis,
-    /// [crate::observation::Record] specific analysis,
-    /// is truly complete when both "obs" and "processing"
-    /// features are enabled
-    observ: QcObsAnalysis,
+    // /// [crate::observation::Record] specific analysis,
+    // /// is truly complete when both "obs" and "processing"
+    // /// features are enabled
+    // observ: QcObsAnalysis,
 }
 
 impl QcAnalysis {
@@ -37,7 +37,7 @@ impl QcAnalysis {
         Self {
             sv: QcSvAnalysis::new(primary, opts),
             sampling: QcSamplingAnalysis::new(primary, opts),
-            observ: QcObsAnalysis::new(primary, opts),
+            // observ: QcObsAnalysis::new(primary, opts),
         }
     }
 }
@@ -91,13 +91,13 @@ impl HtmlReport for QcAnalysis {
                         }
                     }
                 }
-                div(id="observations") {
-                    table(class="table is-bordered; style=\"margin-bottom: 30px\"") {
-                        tbody {
-                            : self.observ.to_inline_html()
-                        }
-                    }
-                }
+                // div(id="observations") {
+                //     table(class="table is-bordered; style=\"margin-bottom: 30px\"") {
+                //         tbody {
+                //             : self.observ.to_inline_html()
+                //         }
+                //     }
+                // }
             }
         }
     }

@@ -965,25 +965,9 @@ impl Rinex {
         let dt = self.dominant_sample_rate()?;
         Some(TimeSeries::inclusive(start, end, dt))
     }
-
     /// Returns sample rate used by the data receiver.
     pub fn sample_rate(&self) -> Option<Duration> {
         self.header.sampling_interval
-    }
-
-    /// Returns dominant sample rate
-    /// ```
-    /// use rinex::prelude::*;
-    /// let rnx = Rinex::from_file("../test_resources/MET/V2/abvi0010.15m")
-    ///     .unwrap();
-    /// assert_eq!(
-    ///     rnx.dominant_sample_rate(),
-    ///     Some(Duration::from_seconds(60.0)));
-    /// ```
-    pub fn dominant_sample_rate(&self) -> Option<Duration> {
-        self.sampling_histogram()
-            .max_by(|(_, pop_i), (_, pop_j)| pop_i.cmp(pop_j))
-            .map(|dominant| dominant.0)
     }
     /// Histogram analysis on Epoch interval. Although
     /// it is feasible on all types indexed by [Epoch],
@@ -1025,11 +1009,6 @@ impl Rinex {
                 })
                 .into_iter(),
         )
-    }
-    /// Returns True if Self has a steady sampling, ie., all epoch interval
-    /// are evenly spaced
-    pub fn steady_sampling(&self) -> bool {
-        self.sampling_histogram().count() == 1
     }
     /// Returns an iterator over unexpected data gaps,
     /// in the form ([`Epoch`], [`Duration`]), where
@@ -1114,7 +1093,6 @@ impl Rinex {
  */
 use crate::navigation::NavFrame;
 use itertools::Itertools; // .unique()
-use observation::ObservationData;
 
 impl Rinex {
     pub fn epoch(&self) -> Box<dyn Iterator<Item = Epoch> + '_> {
@@ -2988,6 +2966,30 @@ impl Split for Rinex {
 
 #[cfg(feature = "qc")]
 #[cfg_attr(docrs, doc(cfg(feature = "qc")))]
+impl Rinex {
+    /// Returns dominant sample rate, ie., most common [Duration] between successive
+    /// [Epoch], discarding minor data gaps that may occur.
+    /// ```
+    /// use rinex::prelude::*;
+    /// let rnx = Rinex::from_file("../test_resources/MET/V2/abvi0010.15m")
+    ///     .unwrap();
+    /// assert_eq!(
+    ///     rnx.dominant_sample_rate(),
+    ///     Some(Duration::from_seconds(60.0)));
+    /// ```
+    pub fn dominant_sample_rate(&self) -> Option<Duration> {
+        self.sampling_histogram()
+            .max_by(|(_, pop_i), (_, pop_j)| pop_i.cmp(pop_j))
+            .map(|dominant| dominant.0)
+    }
+    /// Returns True if Self has a steady sampling, ie., made of evenly spaced [Epoch].
+    pub fn steady_sampling(&self) -> bool {
+        self.sampling_histogram().count() == 1
+    }
+}
+
+#[cfg(feature = "qc")]
+#[cfg_attr(docrs, doc(cfg(feature = "qc")))]
 impl Masking for Rinex {
     fn mask(&self, f: &MaskFilter) -> Self {
         let mut s = self.clone();
@@ -3699,9 +3701,10 @@ mod test {
     use std::str::FromStr;
     #[test]
     fn test_macros() {
-        let _ = observable!("L1C");
-        let _ = filter!("GPS");
-        let _ = filter!("G08, G09");
+        assert_eq!(
+            observable!("L1C");
+            Observable::Phase("L1C".to_string())
+        );
     }
     use crate::{fmt_comment, is_rinex_comment};
     #[test]

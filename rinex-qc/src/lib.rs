@@ -42,7 +42,7 @@ pub(crate) fn table_lengthy_td<A: std::fmt::Display>(
 }
 */
 
-use rinex::preprocessing::{MaskFilter, MaskOperand, Preprocessing, TargetItem};
+// use rinex::preprocessing::{MaskFilter, MaskOperand, Preprocessing, TargetItem};
 
 pub struct QcReport {}
 
@@ -67,50 +67,50 @@ impl QcReport {
          * first convert the classification method to a compatible object,
          * so we can apply a mask filter
          */
-        let mut filter_targets: Vec<TargetItem> = Vec::new();
+        // let mut filter_targets: Vec<TargetItem> = Vec::new();
 
         match opts.classification {
             QcClassification::GNSS => {
                 for gnss in observation.constellation() {
-                    filter_targets.push(TargetItem::from(gnss));
+                    // filter_targets.push(TargetItem::from(gnss));
                 }
             },
             QcClassification::SV => {
                 for sv in observation.sv() {
-                    filter_targets.push(TargetItem::from(sv));
+                    // filter_targets.push(TargetItem::from(sv));
                 }
             },
             QcClassification::Physics => {
                 let mut observables = observation.observable().cloned().collect::<Vec<_>>();
                 observables.sort(); // improves report rendition
                 for obsv in observables {
-                    filter_targets.push(TargetItem::from(obsv));
+                    // filter_targets.push(TargetItem::from(obsv));
                 }
             },
         }
         // apply mask filters and generate an analysis on resulting data set
-        for target in filter_targets {
-            let mask = MaskFilter {
-                item: target,
-                operand: MaskOperand::Equals,
-            };
+        // for target in filter_targets {
+            // let mask = MaskFilter {
+            //     item: target,
+            //     operand: MaskOperand::Equals,
+            // };
 
-            let subset = observation.filter(mask.clone().into());
+            // let subset = observation.filter(mask.clone().into());
 
             // Perform analysis on all grouped subsets.
             //  Improve this:
             //   QcAnalysis::new() should construct from Context directly
             //   and we should have grouped smaller contexts here
-            if let Some(brdc) = ctx.brdc_navigation() {
-                let brdc = brdc.filter(mask.clone().into());
+            // if let Some(brdc) = ctx.brdc_navigation() {
+                // let brdc = brdc.filter(mask.clone().into());
 
                 // perform analysis on these subsets
-                analysis.push(QcAnalysis::new(&subset, &Some(brdc), opts));
-            } else {
+                // analysis.push(QcAnalysis::new(&subset, &Some(brdc), opts));
+            // } else {
                 // perform analysis on these subsets
-                analysis.push(QcAnalysis::new(&subset, &None, opts));
-            }
-        }
+                // analysis.push(QcAnalysis::new(&subset, &None, opts));
+            // }
+        // }
         analysis
     }
     /// Generates a Quality Check Report from provided Context and parametrization,
