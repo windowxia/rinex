@@ -253,12 +253,12 @@ mod test {
     fn elevation_mask_parsing() {
         {
             let (desc, mask) = (
-            "e> 30",
-            MaskFilter {
-                operand: MaskOperand::GreaterThan,
-                token: MaskToken::Elevation(30.0),
-            },
-        );
+                "e> 30",
+                MaskFilter {
+                    operand: MaskOperand::GreaterThan,
+                    token: MaskToken::Elevation(30.0),
+                },
+            );
             let parsed = MaskFilter::from_str(desc).unwrap();
             assert_eq!(parsed, mask, "failed to parse \"{}\"", desc);
         }
@@ -267,12 +267,12 @@ mod test {
     fn azimuth_mask_parsing() {
         {
             let (desc, mask) = (
-            "az< 10",
-            MaskFilter {
-                operand: MaskOperand::LowerThan,
-                token: MaskToken::Azimuth(10.0),
-            },
-        );
+                "az< 10",
+                MaskFilter {
+                    operand: MaskOperand::LowerThan,
+                    token: MaskToken::Azimuth(10.0),
+                },
+            );
             let parsed = MaskFilter::from_str(desc).unwrap();
             assert_eq!(parsed, mask, "failed to parse \"{}\"", desc);
         }
@@ -281,12 +281,12 @@ mod test {
     fn observable_mask_parsing() {
         {
             let (desc, mask) = (
-            "o=L1,L2",
-            MaskFilter {
-                operand: MaskOperand::Equals,
-                token: MaskToken::Observables(vec!["L1".to_string(), "L2".to_string()]),
-            },
-        );
+                "o=L1,L2",
+                MaskFilter {
+                    operand: MaskOperand::Equals,
+                    token: MaskToken::Observables(vec!["L1".to_string(), "L2".to_string()]),
+                },
+            );
             let parsed = MaskFilter::from_str(desc).unwrap();
             assert_eq!(parsed, mask, "failed to parse \"{}\"", desc);
         }
@@ -295,12 +295,12 @@ mod test {
     fn station_mask_parsing() {
         {
             let (desc, mask) = (
-            "sta=ESBCDNK",
-            MaskFilter {
-                operand: MaskOperand::Equals,
-                token: MaskToken::Stations(vec!["ESBCDNK".to_string()]),
-            },
-        );
+                "sta=ESBCDNK",
+                MaskFilter {
+                    operand: MaskOperand::Equals,
+                    token: MaskToken::Stations(vec!["ESBCDNK".to_string()]),
+                },
+            );
             let parsed = MaskFilter::from_str(desc).unwrap();
             assert_eq!(parsed, mask, "failed to parse \"{}\"", desc);
         }
@@ -309,17 +309,17 @@ mod test {
     fn domes_mask_parsing() {
         {
             let (desc, mask) = (
-            "dom=10002M006",
-            MaskFilter {
-                operand: MaskOperand::Equals,
-                token: MaskToken::DOMES(vec![DOMES {
-                    area: 100,
-                    site: 2,
-                    sequential: 6,
-                    point: DomesTrackingPoint::Monument,
-                }]),
-            },
-        );
+                "dom=10002M006",
+                MaskFilter {
+                    operand: MaskOperand::Equals,
+                    token: MaskToken::DOMES(vec![DOMES {
+                        area: 100,
+                        site: 2,
+                        sequential: 6,
+                        point: DomesTrackingPoint::Monument,
+                    }]),
+                },
+            );
             let parsed = MaskFilter::from_str(desc).unwrap();
             assert_eq!(parsed, mask, "failed to parse \"{}\"", desc);
         }

@@ -1,0 +1,719 @@
+
+warning: unused imports: `Header`, `marker::MarkerType`
+ --> rinex/src/tests/obs.rs:6:9
+  |
+6 |         marker::MarkerType,
+  |         ^^^^^^^^^^^^^^^^^^
+7 |         observation::SNR,
+8 |         prelude::{Epoch, EpochFlag, GroundPosition, Duration, SV, Rinex, Constellation, Header, Observable, LliFlags},
+  |                                                                                         ^^^^^^
+
+warning: unused import: `std::str::FromStr`
+  --> rinex/src/lib.rs:60:5
+   |
+60 | use std::str::FromStr;
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `epoch::epoch_decompose`
+  --> rinex/src/lib.rs:67:5
+   |
+67 |     epoch::epoch_decompose,
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0308]: arguments to this function are incorrect
+    --> rinex/src/observation/record.rs:1577:25
+     |
+1577 |         let formatted = fmt_epoch(&header, key, entry);
+     |                         ^^^^^^^^^          ---  ----- expected `&RecordEntry`, found `RecordEntry`
+     |                                            |
+     |                                            expected `&RecordKey`, found `RecordKey`
+     |
+note: function defined here
+    --> rinex/src/observation/record.rs:664:15
+     |
+664  | pub(crate) fn fmt_epoch(
+     |               ^^^^^^^^^
+665  |     header: &Header,
+     |     ---------------
+666  |     key: &RecordKey,
+     |     ---------------
+667  |     entry: &RecordEntry,
+     |     -------------------
+help: consider borrowing here
+     |
+1577 |         let formatted = fmt_epoch(&header, &key, entry);
+     |                                            +
+help: consider borrowing here
+     |
+1577 |         let formatted = fmt_epoch(&header, key, &entry);
+     |                                                 +
+
+error[E0369]: binary operation `==` cannot be applied to type `Result<std::string::String, observation::record::Error>`
+    --> rinex/src/observation/record.rs:1579:9
+     |
+1579 |         assert_eq!(formatted, epoch_str, "epoch formatting reciprocal");
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |         |
+     |         Result<std::string::String, observation::record::Error>
+     |         &str
+     |
+     = note: this error originates in the macro `assert_eq` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `&observation::record::Record` is not an iterator
+  --> rinex/src/tests/toolkit/constant.rs:23:29
+   |
+23 |     for (_, (clk, svnn)) in record {
+   |                             ^^^^^^ `&observation::record::Record` is not an iterator
+   |
+   = help: the trait `Iterator` is not implemented for `&observation::record::Record`, which is required by `&observation::record::Record: IntoIterator`
+   = note: required for `&observation::record::Record` to implement `IntoIterator`
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/toolkit/mod.rs:233:19
+    |
+233 |     for (e_model, (clk_offset_model, vehicles_model)) in rec_model.iter() {
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^     ---------------- this is an iterator with items of type `(&RecordKey, &RecordEntry)`
+    |                   |
+    |                   expected `RecordEntry`, found `(_, _)`
+    |
+    = note: expected struct `RecordEntry`
+                found tuple `(_, _)`
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/toolkit/mod.rs:234:21
+    |
+234 |         if let Some((clk_offset_dut, vehicles_dut)) = rec_dut.get(e_model) {
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^    -------------------- this expression has type `std::option::Option<&RecordEntry>`
+    |                     |
+    |                     expected `RecordEntry`, found `(_, _)`
+    |
+    = note: expected struct `RecordEntry`
+                found tuple `(_, _)`
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/toolkit/mod.rs:283:15
+    |
+283 |     for (e_b, (clk_offset_b, vehicles_b)) in rec_model.iter() {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^     ---------------- this is an iterator with items of type `(&RecordKey, &RecordEntry)`
+    |               |
+    |               expected `RecordEntry`, found `(_, _)`
+    |
+    = note: expected struct `RecordEntry`
+                found tuple `(_, _)`
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/toolkit/mod.rs:284:21
+    |
+284 |         if let Some((clk_offset_model, vehicles_model)) = rec_dut.get(e_b) {
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^    ---------------- this expression has type `std::option::Option<&RecordEntry>`
+    |                     |
+    |                     expected `RecordEntry`, found `(_, _)`
+    |
+    = note: expected struct `RecordEntry`
+                found tuple `(_, _)`
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/decompression.rs:296:22
+    |
+296 |         for (index, ((_e, flag), (clk_offset, vehicles))) in record.iter().enumerate() {
+    |                      ^^^^^^^^^^                              ------------------------- this is an iterator with items of type `(usize, (&RecordKey, &RecordEntry))`
+    |                      |
+    |                      expected `RecordKey`, found `(_, _)`
+    |
+    = note: expected struct `RecordKey`
+                found tuple `(_, _)`
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/decompression.rs:296:34
+    |
+296 |         for (index, ((_e, flag), (clk_offset, vehicles))) in record.iter().enumerate() {
+    |                                  ^^^^^^^^^^^^^^^^^^^^^^      ------------------------- this is an iterator with items of type `(usize, (&RecordKey, &RecordEntry))`
+    |                                  |
+    |                                  expected `RecordEntry`, found `(_, _)`
+    |
+    = note: expected struct `RecordEntry`
+                found tuple `(_, _)`
+
+error[E0277]: `&observation::record::Record` is not an iterator
+   --> rinex/src/tests/decompression.rs:519:37
+    |
+519 |         for (_, (clk_offset, _)) in record {
+    |                                     ^^^^^^ `&observation::record::Record` is not an iterator
+    |
+    = help: the trait `Iterator` is not implemented for `&observation::record::Record`, which is required by `&observation::record::Record: IntoIterator`
+    = note: required for `&observation::record::Record` to implement `IntoIterator`
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/decompression.rs:524:44
+    |
+524 |             let (_, vehicles) = record.get(&(epoch, EpochFlag::Ok)).unwrap();
+    |                                        --- ^^^^^^^^^^^^^^^^^^^^^^^ expected `&RecordKey`, found `&(Epoch, EpochFlag)`
+    |                                        |
+    |                                        arguments to this method are incorrect
+    |
+    = note: expected reference `&RecordKey`
+               found reference `&(hifitime::Epoch, flag::EpochFlag)`
+note: method defined here
+   --> rinex/src/observation/record.rs:161:12
+    |
+161 |     pub fn get(&self, key: &RecordKey) -> Option<&RecordEntry> {
+    |            ^^^        ---------------
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/decompression.rs:524:17
+    |
+524 |             let (_, vehicles) = record.get(&(epoch, EpochFlag::Ok)).unwrap();
+    |                 ^^^^^^^^^^^^^   -------------------------------------------- this expression has type `&RecordEntry`
+    |                 |
+    |                 expected `RecordEntry`, found `(_, _)`
+    |
+    = note: expected struct `RecordEntry`
+                found tuple `(_, _)`
+
+error[E0277]: `&observation::record::Record` is not an iterator
+   --> rinex/src/tests/decompression.rs:732:45
+    |
+732 |         for (_epoch, (clk_offset, _svs)) in record {
+    |                                             ^^^^^^ `&observation::record::Record` is not an iterator
+    |
+    = help: the trait `Iterator` is not implemented for `&observation::record::Record`, which is required by `&observation::record::Record: IntoIterator`
+    = note: required for `&observation::record::Record` to implement `IntoIterator`
+
+error[E0599]: no method named `standard_filename` found for struct `Rinex` in the current scope
+   --> rinex/src/tests/filename.rs:34:28
+    |
+34  |         let output = rinex.standard_filename(true, None, None); // force short
+    |                            ^^^^^^^^^^^^^^^^^ method not found in `Rinex`
+    |
+   ::: rinex/src/lib.rs:241:1
+    |
+241 | pub struct Rinex {
+    | ---------------- method `standard_filename` not found for this struct
+
+error[E0599]: no method named `standard_filename` found for struct `Rinex` in the current scope
+   --> rinex/src/tests/filename.rs:65:28
+    |
+65  |         let output = rinex.standard_filename(false, custom_suffix, None);
+    |                            ^^^^^^^^^^^^^^^^^ method not found in `Rinex`
+    |
+   ::: rinex/src/lib.rs:241:1
+    |
+241 | pub struct Rinex {
+    | ---------------- method `standard_filename` not found for this struct
+
+error[E0599]: no method named `dominant_sample_rate` found for struct `Rinex` in the current scope
+   --> rinex/src/tests/ionex.rs:44:19
+    |
+44  |             rinex.dominant_sample_rate(),
+    |                   ^^^^^^^^^^^^^^^^^^^^ help: there is a method with a similar name: `sample_rate`
+    |
+   ::: rinex/src/lib.rs:241:1
+    |
+241 | pub struct Rinex {
+    | ---------------- method `dominant_sample_rate` not found for this struct
+
+error[E0599]: no method named `dominant_sample_rate` found for struct `Rinex` in the current scope
+   --> rinex/src/tests/ionex.rs:81:19
+    |
+81  |             rinex.dominant_sample_rate(),
+    |                   ^^^^^^^^^^^^^^^^^^^^ help: there is a method with a similar name: `sample_rate`
+    |
+   ::: rinex/src/lib.rs:241:1
+    |
+241 | pub struct Rinex {
+    | ---------------- method `dominant_sample_rate` not found for this struct
+
+error[E0599]: no method named `dominant_sample_rate` found for struct `Rinex` in the current scope
+   --> rinex/src/tests/ionex.rs:134:19
+    |
+134 |             rinex.dominant_sample_rate(),
+    |                   ^^^^^^^^^^^^^^^^^^^^ help: there is a method with a similar name: `sample_rate`
+    |
+   ::: rinex/src/lib.rs:241:1
+    |
+241 | pub struct Rinex {
+    | ---------------- method `dominant_sample_rate` not found for this struct
+
+error[E0599]: no method named `dominant_sample_rate` found for struct `Rinex` in the current scope
+    --> rinex/src/tests/nav.rs:1368:24
+     |
+1368 |         let dt = rinex.dominant_sample_rate().unwrap();
+     |                        ^^^^^^^^^^^^^^^^^^^^ help: there is a method with a similar name: `sample_rate`
+     |
+    ::: rinex/src/lib.rs:241:1
+     |
+241  | pub struct Rinex {
+     | ---------------- method `dominant_sample_rate` not found for this struct
+
+error[E0277]: cannot add `{integer}` to `hifitime::Epoch`
+    --> rinex/src/tests/nav.rs:1372:36
+     |
+1372 |             let tmin = first_epoch + (order / 2) * dt;
+     |                                    ^ no implementation for `hifitime::Epoch + {integer}`
+     |
+     = help: the trait `Add<{integer}>` is not implemented for `hifitime::Epoch`
+     = help: the following other types implement trait `Add<Rhs>`:
+               <hifitime::Epoch as Add<f64>>
+               <hifitime::Epoch as Add<hifitime::Duration>>
+               <hifitime::Epoch as Add<hifitime::Unit>>
+
+error[E0277]: cannot subtract `{integer}` from `hifitime::Epoch`
+    --> rinex/src/tests/nav.rs:1373:35
+     |
+1373 |             let tmax = last_epoch - (order / 2) * dt;
+     |                                   ^ no implementation for `hifitime::Epoch - {integer}`
+     |
+     = help: the trait `Sub<{integer}>` is not implemented for `hifitime::Epoch`
+     = help: the following other types implement trait `Sub<Rhs>`:
+               <hifitime::Epoch as Sub>
+               <hifitime::Epoch as Sub<hifitime::Duration>>
+               <hifitime::Epoch as Sub<hifitime::Unit>>
+
+error[E0599]: no method named `sv_position_interpolate` found for struct `Rinex` in the current scope
+    --> rinex/src/tests/nav.rs:1377:42
+     |
+1377 |                 let interpolated = rinex.sv_position_interpolate(sv, epoch, order as usize);
+     |                                          ^^^^^^^^^^^^^^^^^^^^^^^ help: there is a method with a similar name: `sv_position_geo`
+     |
+    ::: rinex/src/lib.rs:241:1
+     |
+241  | pub struct Rinex {
+     | ---------------- method `sv_position_interpolate` not found for this struct
+
+error[E0308]: mismatched types
+  --> rinex/src/tests/obs.rs:51:26
+   |
+51 |         for (index, (_e, (_, vehicles))) in record.iter().enumerate() {
+   |                          ^^^^^^^^^^^^^      ------------------------- this is an iterator with items of type `(usize, (&RecordKey, &RecordEntry))`
+   |                          |
+   |                          expected `RecordEntry`, found `(_, _)`
+   |
+   = note: expected struct `RecordEntry`
+               found tuple `(_, _)`
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:190:32
+    |
+190 |         let epoch = record.get(&(epoch, flag));
+    |                            --- ^^^^^^^^^^^^^^ expected `&RecordKey`, found `&(Epoch, EpochFlag)`
+    |                            |
+    |                            arguments to this method are incorrect
+    |
+    = note: expected reference `&RecordKey`
+               found reference `&(hifitime::Epoch, flag::EpochFlag)`
+note: method defined here
+   --> rinex/src/observation/record.rs:161:12
+    |
+161 |     pub fn get(&self, key: &RecordKey) -> Option<&RecordEntry> {
+    |            ^^^        ---------------
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:192:13
+    |
+192 |         let (clk_offset, epoch) = epoch.unwrap();
+    |             ^^^^^^^^^^^^^^^^^^^   -------------- this expression has type `&RecordEntry`
+    |             |
+    |             expected `RecordEntry`, found `(_, _)`
+    |
+    = note: expected struct `RecordEntry`
+                found tuple `(_, _)`
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:356:32
+    |
+356 |         let epoch = record.get(&(epoch, EpochFlag::Ok));
+    |                            --- ^^^^^^^^^^^^^^^^^^^^^^^ expected `&RecordKey`, found `&(Epoch, EpochFlag)`
+    |                            |
+    |                            arguments to this method are incorrect
+    |
+    = note: expected reference `&RecordKey`
+               found reference `&(hifitime::Epoch, flag::EpochFlag)`
+note: method defined here
+   --> rinex/src/observation/record.rs:161:12
+    |
+161 |     pub fn get(&self, key: &RecordKey) -> Option<&RecordEntry> {
+    |            ^^^        ---------------
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:358:13
+    |
+358 |         let (clk_offset, epoch) = epoch.unwrap();
+    |             ^^^^^^^^^^^^^^^^^^^   -------------- this expression has type `&RecordEntry`
+    |             |
+    |             expected `RecordEntry`, found `(_, _)`
+    |
+    = note: expected struct `RecordEntry`
+                found tuple `(_, _)`
+
+warning: unused variable: `lhs_v`
+   --> rinex/src/observation/record.rs:840:25
+    |
+840 |             if let Some(lhs_v) = self.get_mut(&rhs_k) {
+    |                         ^^^^^ help: if this is intentional, prefix it with an underscore: `_lhs_v`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `rhs_k`
+   --> rinex/src/observation/record.rs:841:22
+    |
+841 |                 for (rhs_k, rhs_v) in rhs_v.observations.iter() {}
+    |                      ^^^^^ help: if this is intentional, prefix it with an underscore: `_rhs_k`
+
+warning: unused variable: `rhs_v`
+   --> rinex/src/observation/record.rs:841:29
+    |
+841 |                 for (rhs_k, rhs_v) in rhs_v.observations.iter() {}
+    |                             ^^^^^ help: if this is intentional, prefix it with an underscore: `_rhs_v`
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:541:28
+    |
+541 |         let e = record.get(&(epoch, EpochFlag::Ok));
+    |                        --- ^^^^^^^^^^^^^^^^^^^^^^^ expected `&RecordKey`, found `&(Epoch, EpochFlag)`
+    |                        |
+    |                        arguments to this method are incorrect
+    |
+    = note: expected reference `&RecordKey`
+               found reference `&(hifitime::Epoch, flag::EpochFlag)`
+note: method defined here
+   --> rinex/src/observation/record.rs:161:12
+    |
+161 |     pub fn get(&self, key: &RecordKey) -> Option<&RecordEntry> {
+    |            ^^^        ---------------
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:543:13
+    |
+543 |         let (clk, vehicles) = e.unwrap();
+    |             ^^^^^^^^^^^^^^^   ---------- this expression has type `&RecordEntry`
+    |             |
+    |             expected `RecordEntry`, found `(_, _)`
+    |
+    = note: expected struct `RecordEntry`
+                found tuple `(_, _)`
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:610:28
+    |
+610 |         let e = record.get(&(epoch, EpochFlag::Ok));
+    |                        --- ^^^^^^^^^^^^^^^^^^^^^^^ expected `&RecordKey`, found `&(Epoch, EpochFlag)`
+    |                        |
+    |                        arguments to this method are incorrect
+    |
+    = note: expected reference `&RecordKey`
+               found reference `&(hifitime::Epoch, flag::EpochFlag)`
+note: method defined here
+   --> rinex/src/observation/record.rs:161:12
+    |
+161 |     pub fn get(&self, key: &RecordKey) -> Option<&RecordEntry> {
+    |            ^^^        ---------------
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:612:13
+    |
+612 |         let (clk, vehicles) = e.unwrap();
+    |             ^^^^^^^^^^^^^^^   ---------- this expression has type `&RecordEntry`
+    |             |
+    |             expected `RecordEntry`, found `(_, _)`
+    |
+    = note: expected struct `RecordEntry`
+                found tuple `(_, _)`
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:617:28
+    |
+617 |         let e = record.get(&(epoch, EpochFlag::Ok));
+    |                        --- ^^^^^^^^^^^^^^^^^^^^^^^ expected `&RecordKey`, found `&(Epoch, EpochFlag)`
+    |                        |
+    |                        arguments to this method are incorrect
+    |
+    = note: expected reference `&RecordKey`
+               found reference `&(hifitime::Epoch, flag::EpochFlag)`
+note: method defined here
+   --> rinex/src/observation/record.rs:161:12
+    |
+161 |     pub fn get(&self, key: &RecordKey) -> Option<&RecordEntry> {
+    |            ^^^        ---------------
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:619:13
+    |
+619 |         let (clk, vehicles) = e.unwrap();
+    |             ^^^^^^^^^^^^^^^   ---------- this expression has type `&RecordEntry`
+    |             |
+    |             expected `RecordEntry`, found `(_, _)`
+    |
+    = note: expected struct `RecordEntry`
+                found tuple `(_, _)`
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:685:32
+    |
+685 |         let epoch = record.get(&(epoch, EpochFlag::Ok));
+    |                            --- ^^^^^^^^^^^^^^^^^^^^^^^ expected `&RecordKey`, found `&(Epoch, EpochFlag)`
+    |                            |
+    |                            arguments to this method are incorrect
+    |
+    = note: expected reference `&RecordKey`
+               found reference `&(hifitime::Epoch, flag::EpochFlag)`
+note: method defined here
+   --> rinex/src/observation/record.rs:161:12
+    |
+161 |     pub fn get(&self, key: &RecordKey) -> Option<&RecordEntry> {
+    |            ^^^        ---------------
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:687:13
+    |
+687 |         let (clk_offset, epoch) = epoch.unwrap();
+    |             ^^^^^^^^^^^^^^^^^^^   -------------- this expression has type `&RecordEntry`
+    |             |
+    |             expected `RecordEntry`, found `(_, _)`
+    |
+    = note: expected struct `RecordEntry`
+                found tuple `(_, _)`
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:693:32
+    |
+693 |         let epoch = record.get(&(epoch, EpochFlag::Ok));
+    |                            --- ^^^^^^^^^^^^^^^^^^^^^^^ expected `&RecordKey`, found `&(Epoch, EpochFlag)`
+    |                            |
+    |                            arguments to this method are incorrect
+    |
+    = note: expected reference `&RecordKey`
+               found reference `&(hifitime::Epoch, flag::EpochFlag)`
+note: method defined here
+   --> rinex/src/observation/record.rs:161:12
+    |
+161 |     pub fn get(&self, key: &RecordKey) -> Option<&RecordEntry> {
+    |            ^^^        ---------------
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:695:13
+    |
+695 |         let (clk_offset, epoch) = epoch.unwrap();
+    |             ^^^^^^^^^^^^^^^^^^^   -------------- this expression has type `&RecordEntry`
+    |             |
+    |             expected `RecordEntry`, found `(_, _)`
+    |
+    = note: expected struct `RecordEntry`
+                found tuple `(_, _)`
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:701:32
+    |
+701 |         let epoch = record.get(&(epoch, EpochFlag::Ok));
+    |                            --- ^^^^^^^^^^^^^^^^^^^^^^^ expected `&RecordKey`, found `&(Epoch, EpochFlag)`
+    |                            |
+    |                            arguments to this method are incorrect
+    |
+    = note: expected reference `&RecordKey`
+               found reference `&(hifitime::Epoch, flag::EpochFlag)`
+note: method defined here
+   --> rinex/src/observation/record.rs:161:12
+    |
+161 |     pub fn get(&self, key: &RecordKey) -> Option<&RecordEntry> {
+    |            ^^^        ---------------
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:703:13
+    |
+703 |         let (clk_offset, epoch) = epoch.unwrap();
+    |             ^^^^^^^^^^^^^^^^^^^   -------------- this expression has type `&RecordEntry`
+    |             |
+    |             expected `RecordEntry`, found `(_, _)`
+    |
+    = note: expected struct `RecordEntry`
+                found tuple `(_, _)`
+
+error[E0599]: no method named `carrier_phase` found for struct `Rinex` in the current scope
+   --> rinex/src/tests/obs.rs:778:14
+    |
+777 |           let phase_l1c: Vec<_> = rnx
+    |  _________________________________-
+778 | |             .carrier_phase()
+    | |             -^^^^^^^^^^^^^ help: there is a method with a similar name: `doris_phase`
+    | |_____________|
+    | 
+    |
+   ::: rinex/src/lib.rs:241:1
+    |
+241 |   pub struct Rinex {
+    |   ---------------- method `carrier_phase` not found for this struct
+
+error[E0599]: no method named `pseudo_range` found for struct `Rinex` in the current scope
+   --> rinex/src/tests/obs.rs:818:14
+    |
+817 |           let c1: Vec<_> = rnx
+    |  __________________________-
+818 | |             .pseudo_range()
+    | |             -^^^^^^^^^^^^ help: there is a method with a similar name: `doris_pseudo_range`
+    | |_____________|
+    | 
+    |
+   ::: rinex/src/lib.rs:241:1
+    |
+241 |   pub struct Rinex {
+    |   ---------------- method `pseudo_range` not found for this struct
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:861:49
+    |
+861 |         let (clk_offset, vehicles) = record.get(&(*epoch, flag)).unwrap();
+    |                                             --- ^^^^^^^^^^^^^^^ expected `&RecordKey`, found `&(Epoch, EpochFlag)`
+    |                                             |
+    |                                             arguments to this method are incorrect
+    |
+    = note: expected reference `&RecordKey`
+               found reference `&(hifitime::Epoch, flag::EpochFlag)`
+note: method defined here
+   --> rinex/src/observation/record.rs:161:12
+    |
+161 |     pub fn get(&self, key: &RecordKey) -> Option<&RecordEntry> {
+    |            ^^^        ---------------
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:861:13
+    |
+861 |         let (clk_offset, vehicles) = record.get(&(*epoch, flag)).unwrap();
+    |             ^^^^^^^^^^^^^^^^^^^^^^   ------------------------------------ this expression has type `&RecordEntry`
+    |             |
+    |             expected `RecordEntry`, found `(_, _)`
+    |
+    = note: expected struct `RecordEntry`
+                found tuple `(_, _)`
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:938:49
+    |
+938 |         let (clk_offset, vehicles) = record.get(&(*epoch, flag)).unwrap();
+    |                                             --- ^^^^^^^^^^^^^^^ expected `&RecordKey`, found `&(Epoch, EpochFlag)`
+    |                                             |
+    |                                             arguments to this method are incorrect
+    |
+    = note: expected reference `&RecordKey`
+               found reference `&(hifitime::Epoch, flag::EpochFlag)`
+note: method defined here
+   --> rinex/src/observation/record.rs:161:12
+    |
+161 |     pub fn get(&self, key: &RecordKey) -> Option<&RecordEntry> {
+    |            ^^^        ---------------
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/obs.rs:938:13
+    |
+938 |         let (clk_offset, vehicles) = record.get(&(*epoch, flag)).unwrap();
+    |             ^^^^^^^^^^^^^^^^^^^^^^   ------------------------------------ this expression has type `&RecordEntry`
+    |             |
+    |             expected `RecordEntry`, found `(_, _)`
+    |
+    = note: expected struct `RecordEntry`
+                found tuple `(_, _)`
+
+error[E0308]: mismatched types
+    --> rinex/src/tests/obs.rs:1032:24
+     |
+1032 |         for (e_index, ((_e, flag), (clk_offset, vehicles))) in record.iter().enumerate() {
+     |                        ^^^^^^^^^^                              ------------------------- this is an iterator with items of type `(usize, (&RecordKey, &RecordEntry))`
+     |                        |
+     |                        expected `RecordKey`, found `(_, _)`
+     |
+     = note: expected struct `RecordKey`
+                 found tuple `(_, _)`
+
+error[E0308]: mismatched types
+    --> rinex/src/tests/obs.rs:1032:36
+     |
+1032 |         for (e_index, ((_e, flag), (clk_offset, vehicles))) in record.iter().enumerate() {
+     |                                    ^^^^^^^^^^^^^^^^^^^^^^      ------------------------- this is an iterator with items of type `(usize, (&RecordKey, &RecordEntry))`
+     |                                    |
+     |                                    expected `RecordEntry`, found `(_, _)`
+     |
+     = note: expected struct `RecordEntry`
+                 found tuple `(_, _)`
+
+error[E0599]: no method named `substract` found for struct `Rinex` in the current scope
+   --> rinex/src/tests/parsing.rs:102:50
+    |
+102 | ...                   is_null_rinex(&rinex.substract(&rinex), 1.0E-9); // Self - Self should always be null
+    |                                            ^^^^^^^^^ method not found in `Rinex`
+    |
+   ::: rinex/src/lib.rs:241:1
+    |
+241 | pub struct Rinex {
+    | ---------------- method `substract` not found for this struct
+
+error[E0308]: mismatched types
+   --> rinex/src/tests/parsing.rs:118:34
+    |
+118 | ...                   for ((e, _), _) in rinex.observation() {
+    |                            ^^^^^^        ------------------- this is an iterator with items of type `(&RecordKey, &RecordEntry)`
+    |                            |
+    |                            expected `RecordKey`, found `(_, _)`
+    |
+    = note: expected struct `RecordKey`
+                found tuple `(_, _)`
+
+warning: unused import: `itertools::Itertools`
+ --> rinex/src/tests/doris.rs:7:9
+  |
+7 |     use itertools::Itertools;
+  |         ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `rhs`
+    --> rinex/src/lib.rs:3068:18
+     |
+3068 |     fn sub(self, rhs: Rinex) -> Self::Output {
+     |                  ^^^ help: if this is intentional, prefix it with an underscore: `_rhs`
+
+Some errors have detailed explanations: E0277, E0308, E0369, E0599.
+For more information about an error, try `rustc --explain E0277`.
+warning: `rinex` (lib test) generated 5 warnings
+error: could not compile `rinex` (lib test) due to 49 previous errors; 5 warnings emitted
+warning: build failed, waiting for other jobs to finish...
+warning: methods `get_station` and `scaling` are never used
+  --> rinex/src/doris/mod.rs:54:19
+   |
+52 | impl HeaderFields {
+   | ----------------- methods in this implementation
+53 |     /// Retrieve station by ID#
+54 |     pub(crate) fn get_station(&mut self, id: u16) -> Option<&Station> {
+   |                   ^^^^^^^^^^^
+...
+65 |     pub(crate) fn scaling(&self, observable: Observable) -> Option<&u16> {
+   |                   ^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: function `epoch_decompose` is never used
+   --> rinex/src/epoch.rs:246:15
+    |
+246 | pub(crate) fn epoch_decompose(e: Epoch) -> (i32, u8, u8, u8, u8, u8, u32) {
+    |               ^^^^^^^^^^^^^^^
+
+warning: field `clock_diff` is never read
+  --> rinex/src/hatanaka/compressor.rs:43:5
+   |
+23 | pub struct Compressor {
+   |            ---------- field in this struct
+...
+43 |     clock_diff: NumDiff,
+   |     ^^^^^^^^^^
+
+warning: function `merge_plane_mut` is never used
+  --> rinex/src/ionex/record.rs:78:4
+   |
+78 | fn merge_plane_mut(lhs: &mut TECPlane, rhs: &TECPlane) {
+   |    ^^^^^^^^^^^^^^^
+
+warning: method `scaling` is never used
+   --> rinex/src/observation/mod.rs:143:19
+    |
+124 | impl HeaderFields {
+    | ----------------- method in this implementation
+...
+143 |     pub(crate) fn scaling(&self, c: Constellation, observable: Observable) -> Option<&u16> {
+    |                   ^^^^^^^
+
+warning: `rinex` (lib) generated 11 warnings (1 duplicate) (run `cargo fix --lib -p rinex` to apply 5 suggestions)

@@ -4,6 +4,7 @@ mod test {
     use std::path::Path;
     #[test]
     #[cfg(feature = "flate2")]
+    #[cfg(feature = "qc")]
     fn v1_ckmg0090_12i() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("..")

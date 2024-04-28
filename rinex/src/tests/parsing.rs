@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-
+    use crate::observation::Substract;
     use crate::prelude::*;
     use crate::tests::toolkit::is_null_rinex;
     use std::path::PathBuf;
@@ -115,8 +115,8 @@ mod test {
                             }
 
                             /* Timescale validity */
-                            for ((e, _), _) in rinex.observation() {
-                                let ts = e.time_scale;
+                            for (key, _) in rinex.observation() {
+                                let ts = key.epoch.time_scale;
                                 if let Some(e0) = obs_header.time_of_first_obs {
                                     assert!(
                                         e0.time_scale == ts,

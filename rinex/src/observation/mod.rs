@@ -159,6 +159,19 @@ pub enum Combination {
     MelbourneWubbena,
 }
 
+/// Observation Subtraction ops.
+/// Used in Differential processing
+pub trait Substract {
+    /// Generates a new Copy = [Self - rhs]
+    /// where rhs is considered reference in the differential ops.
+    /// This is used on OBS_RINEX to compare GNSS receivers to one another for example.
+    /// This only applies to Observation, Meteo and DORIS RINEX, and will panic
+    /// on any other RINEX form.
+    fn substract(&self, rhs: &Self) -> Self;
+    /// [substract] in place with mutable access.
+    fn substract_mut(&mut self, rhs: &Self);
+}
+
 /// GNSS signal combination trait.    
 /// This only applies to OBS RINEX records.  
 /// Refer to [Bibliography::ESAGnssCombination] and [Bibliography::ESABookVol1]

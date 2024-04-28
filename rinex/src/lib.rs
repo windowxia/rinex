@@ -30,7 +30,9 @@ mod ground_position;
 mod leap; // leap second
 mod linspace; // grid and linear spacing
 mod observable;
-mod production; // RINEX production infrastructure // physical observations
+
+#[cfg(feature = "qc")]
+mod qc;
 
 #[cfg(test)]
 mod tests;
@@ -62,16 +64,17 @@ use thiserror::Error;
 use crate::{
     antex::{Antenna, AntennaSpecific, FrequencyDependentData},
     doris::ObservationData as DorisObservationData,
-    epoch::epoch_decompose,
     ionex::TECPlane,
     observable::Observable,
     observation::{
         record::{RecordEntry as ObsRecordEntry, RecordKey as ObsRecordKey},
         Crinex,
     },
-    production::{DataSource, DetailedProductionAttributes, ProductionAttributes, FFU, PPU},
     version::Version,
 };
+
+#[cfg(feature = "qc")]
+use crate::qc::ProductionAttributes;
 
 use hifitime::Unit;
 //use hifitime::{efmt::Format as EpochFormat, efmt::Formatter as EpochFormatter, Duration, Unit};
@@ -86,21 +89,30 @@ pub mod prelude {
     pub use crate::context::{ProductType, RnxContext};
     #[cfg(feature = "doris")]
     pub use crate::doris::{ObservationData as DorisObservationData, Station};
-    pub use crate::ground_position::GroundPosition;
-    pub use crate::header::Header;
-    pub use crate::observable::Observable;
-    pub use crate::observation::EpochFlag;
-    pub use crate::types::Type as RinexType;
-    pub use crate::Error;
-    pub use crate::Rinex;
+    #[cfg(feature = "obs")]
+    pub use crate::observation::{
+        EpochFlag,
+        LliFlags,
+    };
+    pub use crate::{
+        Error,
+        Rinex,
+        types::Type as RinexType,
+        version::Version,
+        observable::Observable,
+        header::Header,
+        ground_position::GroundPosition,
+    };
     // gnss_rs re-export
-    pub use gnss::prelude::{Constellation, DomesTrackingPoint, COSPAR, DOMES, SV};
+    pub use gnss::prelude::{Constellation, SV, COSPAR, DOMES, DomesTrackingPoint};
+    // hifitime re-export
     pub use hifitime::{Duration, Epoch, TimeScale, TimeSeries};
 }
 
 /// Package dedicated to file production.
+#[cfg(feature = "qc")]
 pub mod prod {
-    pub use crate::production::{
+    pub use crate::qc::production::{
         DataSource, DetailedProductionAttributes, ProductionAttributes, FFU, PPU,
     };
 }
@@ -109,11 +121,11 @@ pub mod prod {
 #[macro_use]
 extern crate horrorshow;
 
-#[cfg(feature = "qc")]
-use rinex_qc_traits::{MaskFilter, Masking};
-
 #[cfg(feature = "sp3")]
 mod context;
+
+#[cfg(feature = "qc")]
+mod qc;
 
 use carrier::Carrier;
 use prelude::*;
@@ -239,6 +251,7 @@ pub struct Rinex {
      * File Production attributes, attached to Self
      * parsed from files that follow stadard naming conventions
      */
+    #[cfg(feature = "qc")]
     prod_attr: Option<ProductionAttributes>,
 }
 
@@ -260,6 +273,7 @@ impl Rinex {
             header,
             record,
             comments: record::Comments::new(),
+            #[cfg(feature = "qc")]
             prod_attr: None,
         }
     }
@@ -269,6 +283,7 @@ impl Rinex {
             header,
             record: self.record.clone(),
             comments: self.comments.clone(),
+            #[cfg(feature = "qc")]
             prod_attr: self.prod_attr.clone(),
         }
     }
@@ -279,9 +294,10 @@ impl Rinex {
     /// Returns a copy of self with given internal record.
     pub fn with_record(&self, record: record::Record) -> Self {
         Rinex {
+            record,
             header: self.header.clone(),
             comments: self.comments.clone(),
-            record,
+            #[cfg(feature = "qc")]
             prod_attr: self.prod_attr.clone(),
         }
     }
@@ -384,406 +400,6 @@ impl Rinex {
                 });
         }
     }
-    /// Returns a filename that would describe Self according to standard naming conventions.
-    /// For this information to be 100% complete, Self must come from a file
-    /// that follows these conventions itself.
-    /// Otherwise you must provide [ProductionAttributes] yourself with "custom".
-    /// In any case, this method is infaillible. You will just lack more or
-    /// less information, depending on current context.
-    /// If you're working with Observation, Navigation or Meteo data,
-    /// and prefered shorter filenames (V2 like format): force short to "true".
-    /// Otherwse, we will prefer modern V3 like formats.
-    /// Use "suffix" to append a custom suffix like ".gz" for example.
-    /// NB this will only output uppercase filenames (as per standard specs).
-    /// ```
-    /// use rinex::prelude::*;
-    /// // Parse a File that follows standard naming conventions
-    /// // and verify we generate something correct
-    /// ```
-    pub fn standard_filename(
-        &self,
-        short: bool,
-        suffix: Option<&str>,
-        custom: Option<ProductionAttributes>,
-    ) -> String {
-        let header = &self.header;
-        let rinextype = header.rinex_type;
-        let is_crinex = header.is_crinex();
-        let constellation = header.constellation;
-
-        let mut filename = match rinextype {
-            RinexType::IonosphereMaps => {
-                let name = match custom {
-                    Some(ref custom) => {
-                        custom.name[..std::cmp::min(3, custom.name.len())].to_string()
-                    },
-                    None => {
-                        if let Some(attr) = &self.prod_attr {
-                            attr.name.clone()
-                        } else {
-                            "XXX".to_string()
-                        }
-                    },
-                };
-                let region = match &custom {
-                    Some(ref custom) => custom.region.unwrap_or('G'),
-                    None => {
-                        if let Some(attr) = &self.prod_attr {
-                            attr.region.unwrap_or('G')
-                        } else {
-                            'G'
-                        }
-                    },
-                };
-                let ddd = match &custom {
-                    Some(ref custom) => format!("{:03}", custom.doy),
-                    None => {
-                        if let Some(epoch) = self.first_epoch() {
-                            let ddd = epoch.day_of_year().round() as u32;
-                            format!("{:03}", ddd)
-                        } else {
-                            "DDD".to_string()
-                        }
-                    },
-                };
-                let yy = match &custom {
-                    Some(ref custom) => format!("{:02}", custom.year - 2_000),
-                    None => {
-                        if let Some(epoch) = self.first_epoch() {
-                            let yy = epoch_decompose(epoch).0;
-                            format!("{:02}", yy - 2_000)
-                        } else {
-                            "YY".to_string()
-                        }
-                    },
-                };
-                ProductionAttributes::ionex_format(&name, region, &ddd, &yy)
-            },
-            RinexType::ObservationData | RinexType::MeteoData | RinexType::NavigationData => {
-                let name = match custom {
-                    Some(ref custom) => custom.name.clone(),
-                    None => {
-                        if let Some(attr) = &self.prod_attr {
-                            attr.name.clone()
-                        } else {
-                            "XXXX".to_string()
-                        }
-                    },
-                };
-                let ddd = match &custom {
-                    Some(ref custom) => format!("{:03}", custom.doy),
-                    None => {
-                        if let Some(epoch) = self.first_epoch() {
-                            let ddd = epoch.day_of_year().round() as u32;
-                            format!("{:03}", ddd)
-                        } else {
-                            "DDD".to_string()
-                        }
-                    },
-                };
-                if short {
-                    let yy = match &custom {
-                        Some(ref custom) => format!("{:02}", custom.year - 2_000),
-                        None => {
-                            if let Some(epoch) = self.first_epoch() {
-                                let yy = epoch_decompose(epoch).0;
-                                format!("{:02}", yy - 2_000)
-                            } else {
-                                "YY".to_string()
-                            }
-                        },
-                    };
-                    let ext = match rinextype {
-                        RinexType::ObservationData => {
-                            if is_crinex {
-                                'D'
-                            } else {
-                                'O'
-                            }
-                        },
-                        RinexType::MeteoData => 'M',
-                        RinexType::NavigationData => match constellation {
-                            Some(Constellation::Glonass) => 'G',
-                            _ => 'N',
-                        },
-                        _ => unreachable!("unreachable"),
-                    };
-                    ProductionAttributes::rinex_short_format(&name, &ddd, &yy, ext)
-                } else {
-                    /* long /V3 like format */
-                    let batch = match &custom {
-                        Some(ref custom) => {
-                            if let Some(details) = &custom.details {
-                                details.batch
-                            } else {
-                                0
-                            }
-                        },
-                        None => {
-                            if let Some(attr) = &self.prod_attr {
-                                if let Some(details) = &attr.details {
-                                    details.batch
-                                } else {
-                                    0
-                                }
-                            } else {
-                                0
-                            }
-                        },
-                    };
-                    let country = match &custom {
-                        Some(ref custom) => {
-                            if let Some(details) = &custom.details {
-                                details.country.to_string()
-                            } else {
-                                "CCC".to_string()
-                            }
-                        },
-                        None => {
-                            if let Some(attr) = &self.prod_attr {
-                                if let Some(details) = &attr.details {
-                                    details.country.to_string()
-                                } else {
-                                    "CCC".to_string()
-                                }
-                            } else {
-                                "CCC".to_string()
-                            }
-                        },
-                    };
-                    let src = match &header.rcvr {
-                        Some(_) => 'R', // means GNSS rcvr
-                        None => {
-                            if let Some(attr) = &self.prod_attr {
-                                if let Some(details) = &attr.details {
-                                    details.data_src.to_char()
-                                } else {
-                                    'U' // means unspecified
-                                }
-                            } else {
-                                'U' // means unspecified
-                            }
-                        },
-                    };
-                    let yyyy = match &custom {
-                        Some(ref custom) => format!("{:04}", custom.year),
-                        None => {
-                            if let Some(epoch) = self.first_epoch() {
-                                let yy = epoch_decompose(epoch).0;
-                                format!("{:04}", yy)
-                            } else {
-                                "YYYY".to_string()
-                            }
-                        },
-                    };
-                    let (hh, mm) = match &custom {
-                        Some(ref custom) => {
-                            if let Some(details) = &custom.details {
-                                (format!("{:02}", details.hh), format!("{:02}", details.mm))
-                            } else {
-                                ("HH".to_string(), "MM".to_string())
-                            }
-                        },
-                        None => {
-                            if let Some(epoch) = self.first_epoch() {
-                                let (_, _, _, hh, mm, _, _) = epoch_decompose(epoch);
-                                (format!("{:02}", hh), format!("{:02}", mm))
-                            } else {
-                                ("HH".to_string(), "MM".to_string())
-                            }
-                        },
-                    };
-                    // FFU sampling rate
-                    let ffu = match self.dominant_sample_rate() {
-                        Some(duration) => FFU::from(duration).to_string(),
-                        None => {
-                            if let Some(ref custom) = custom {
-                                if let Some(details) = &custom.details {
-                                    if let Some(ffu) = details.ffu {
-                                        ffu.to_string()
-                                    } else {
-                                        "XXX".to_string()
-                                    }
-                                } else {
-                                    "XXX".to_string()
-                                }
-                            } else {
-                                "XXX".to_string()
-                            }
-                        },
-                    };
-                    // ffu only in OBS file names
-                    let ffu = match rinextype {
-                        RinexType::ObservationData => Some(ffu),
-                        _ => None,
-                    };
-                    // PPU periodicity
-                    let ppu = if let Some(ref custom) = custom {
-                        if let Some(details) = &custom.details {
-                            details.ppu
-                        } else {
-                            PPU::Unspecified
-                        }
-                    } else if let Some(ref attr) = self.prod_attr {
-                        if let Some(details) = &attr.details {
-                            details.ppu
-                        } else {
-                            PPU::Unspecified
-                        }
-                    } else {
-                        PPU::Unspecified
-                    };
-                    let fmt = match rinextype {
-                        RinexType::ObservationData => "MO".to_string(),
-                        RinexType::MeteoData => "MM".to_string(),
-                        RinexType::NavigationData => match constellation {
-                            Some(Constellation::Mixed) | None => "MN".to_string(),
-                            Some(constell) => format!("M{:x}", constell),
-                        },
-                        _ => unreachable!("unreachable fmt"),
-                    };
-                    let ext = if is_crinex { "crx" } else { "rnx" };
-                    ProductionAttributes::rinex_long_format(
-                        &name,
-                        batch,
-                        &country,
-                        src,
-                        &yyyy,
-                        &ddd,
-                        &hh,
-                        &mm,
-                        &ppu.to_string(),
-                        ffu.as_deref(),
-                        &fmt,
-                        ext,
-                    )
-                }
-            },
-            rinex => unimplemented!("{} format", rinex),
-        };
-        if let Some(suffix) = suffix {
-            filename.push_str(suffix);
-        }
-        filename
-    }
-
-    /// Guesses File [ProductionAttributes] from the actual Record content.
-    /// This is particularly useful when working with datasets we are confident about,
-    /// yet that do not follow standard naming conventions.
-    /// Here is an example of such use case:
-    /// ```
-    /// use rinex::prelude::*;
-    ///
-    /// // Parse one file that does not follow naming conventions
-    /// let rinex = Rinex::from_file("../test_resources/MET/V4/example1.txt");
-    /// assert!(rinex.is_ok()); // As previously stated, we totally accept that
-    /// let rinex = rinex.unwrap();
-    ///
-    /// // The standard file name generator has no means to generate something correct.
-    /// let standard_name = rinex.standard_filename(true, None, None);
-    /// assert_eq!(standard_name, "XXXX0070.21M");
-    ///
-    /// // We use the smart attributes detector as custom attributes
-    /// let guessed = rinex.guess_production_attributes();
-    /// let standard_name = rinex.standard_filename(true, None, Some(guessed.clone()));
-    ///
-    /// // we get a perfect shortened name
-    /// assert_eq!(standard_name, "bako0070.21M");
-    ///
-    /// // If we ask for a (modern) long standard filename, we mostly get it right,
-    /// // but some fields like the Country code can only be determined from the original filename,
-    /// // so we have no means to receover them.
-    /// let standard_name = rinex.standard_filename(false, None, Some(guessed.clone()));
-    /// assert_eq!(standard_name, "bako00XXX_U_20210070000_00U_MM.rnx");
-    /// ```
-    pub fn guess_production_attributes(&self) -> ProductionAttributes {
-        // start from content identified from the filename
-        let mut attributes = self.prod_attr.clone().unwrap_or_default();
-
-        let first_epoch = self.first_epoch();
-        let last_epoch = self.last_epoch();
-        let first_epoch_gregorian = first_epoch.map(|t0| t0.to_gregorian_utc());
-
-        match first_epoch_gregorian {
-            Some((y, _, _, _, _, _, _)) => attributes.year = y as u32,
-            _ => {},
-        }
-        match first_epoch {
-            Some(t0) => attributes.doy = t0.day_of_year().round() as u32,
-            _ => {},
-        }
-        // notes on attribute."name"
-        // - Non detailed OBS RINEX: this is usually the station name
-        //   which can be named after a geodetic marker
-        // - Non detailed NAV RINEX: station name
-        // - CLK RINEX: name of the local clock
-        // - IONEX: agency
-        match self.header.rinex_type {
-            RinexType::ClockData => match &self.header.clock {
-                Some(clk) => match &clk.ref_clock {
-                    Some(refclock) => attributes.name = refclock.to_string(),
-                    _ => {
-                        if let Some(site) = &clk.site {
-                            attributes.name = site.to_string();
-                        } else {
-                            attributes.name = self.header.agency.to_string();
-                        }
-                    },
-                },
-                _ => attributes.name = self.header.agency.to_string(),
-            },
-            RinexType::IonosphereMaps => {
-                attributes.name = self.header.agency.to_string();
-            },
-            _ => match &self.header.geodetic_marker {
-                Some(marker) => attributes.name = marker.name.to_string(),
-                _ => attributes.name = self.header.agency.to_string(),
-            },
-        }
-        if let Some(ref mut details) = attributes.details {
-            if let Some((_, _, _, hh, mm, _, _)) = first_epoch_gregorian {
-                details.hh = hh;
-                details.mm = mm;
-            }
-            if let Some(first_epoch) = first_epoch {
-                if let Some(last_epoch) = last_epoch {
-                    let total_dt = last_epoch - first_epoch;
-                    details.ppu = PPU::from(total_dt);
-                }
-            }
-        } else {
-            attributes.details = Some(DetailedProductionAttributes {
-                batch: 0,                      // see notes down below
-                country: "XXX".to_string(),    // see notes down below
-                data_src: DataSource::Unknown, // see notes down below
-                ppu: match (first_epoch, last_epoch) {
-                    (Some(first), Some(last)) => {
-                        let total_dt = last - first;
-                        PPU::from(total_dt)
-                    },
-                    _ => PPU::Unspecified,
-                },
-                ffu: self.dominant_sample_rate().map(FFU::from),
-                hh: match first_epoch_gregorian {
-                    Some((_, _, _, hh, _, _, _)) => hh,
-                    _ => 0,
-                },
-                mm: match first_epoch_gregorian {
-                    Some((_, _, _, _, mm, _, _)) => mm,
-                    _ => 0,
-                },
-            });
-        }
-        /*
-         * Several fields cannot be deduced from the actual
-         * Record content. If provided filename did not describe them,
-         * we have no means to recover them.
-         * Example of such fields would be:
-         *    + Country Code: would require a worldwide country database
-         *    + Data source: is only defined in the filename
-         */
-        attributes
-    }
 
     /// Builds a `RINEX` from given file fullpath.
     /// Header section must respect labelization standards,
@@ -809,6 +425,7 @@ impl Rinex {
 
         // Parse / identify production attributes
         // that only exist in the filename.
+        #[cfg(feature = "qc")]
         let prod_attr = match path.file_name() {
             Some(filename) => {
                 let filename = filename.to_string_lossy().to_string();
@@ -825,6 +442,7 @@ impl Rinex {
             header,
             record,
             comments,
+            #[cfg(feature = "qc")]
             prod_attr,
         })
     }
@@ -944,28 +562,19 @@ impl Rinex {
     pub fn first_epoch(&self) -> Option<Epoch> {
         self.epoch().next()
     }
-
     /// Returns last [`Epoch`] encountered in time
     pub fn last_epoch(&self) -> Option<Epoch> {
         self.epoch().last()
     }
-
-    /// Returns Duration of (time spanned by) this RINEX
+    /// Returns total time span as a [`Duration`] 
     pub fn duration(&self) -> Option<Duration> {
         let start = self.first_epoch()?;
         let end = self.last_epoch()?;
         Some(end - start)
     }
-
-    /// Form a [`Timeseries`] iterator spanning [Self::duration]
-    /// with [Self::dominant_sample_rate] spacing
-    pub fn timeseries(&self) -> Option<TimeSeries> {
-        let start = self.first_epoch()?;
-        let end = self.last_epoch()?;
-        let dt = self.dominant_sample_rate()?;
-        Some(TimeSeries::inclusive(start, end, dt))
-    }
     /// Returns sample rate used by the data receiver.
+    /// This is not immune of [self.data_gaps],
+    /// [self.dominant_sample_rate] is there to reflect the truth.
     pub fn sample_rate(&self) -> Option<Duration> {
         self.header.sampling_interval
     }
@@ -1008,80 +617,6 @@ impl Rinex {
                     list
                 })
                 .into_iter(),
-        )
-    }
-    /// Returns an iterator over unexpected data gaps,
-    /// in the form ([`Epoch`], [`Duration`]), where
-    /// epoch is the starting datetime, and its related duration.
-    /// ```
-    /// use std::str::FromStr;
-    /// use rinex::prelude::{Rinex, Epoch, Duration};
-    /// let rinex = Rinex::from_file("../test_resources/MET/V2/abvi0010.15m")
-    ///     .unwrap();
-    ///
-    /// // when tolerance is set to None,
-    /// // the reference sample rate is [Self::dominant_sample_rate].
-    /// let mut tolerance : Option<Duration> = None;
-    /// let gaps : Vec<_> = rinex.data_gaps(tolerance).collect();
-    /// assert!(
-    ///     rinex.data_gaps(None).eq(
-    ///         vec![
-    ///             (Epoch::from_str("2015-01-01T00:09:00 UTC").unwrap(), Duration::from_seconds(8.0 * 3600.0 + 51.0 * 60.0)),
-    ///             (Epoch::from_str("2015-01-01T09:04:00 UTC").unwrap(), Duration::from_seconds(10.0 * 3600.0 + 21.0 * 60.0)),
-    ///             (Epoch::from_str("2015-01-01T19:54:00 UTC").unwrap(), Duration::from_seconds(3.0 * 3600.0 + 1.0 * 60.0)),
-    ///             (Epoch::from_str("2015-01-01T23:02:00 UTC").unwrap(), Duration::from_seconds(7.0 * 60.0)),
-    ///             (Epoch::from_str("2015-01-01T23:21:00 UTC").unwrap(), Duration::from_seconds(31.0 * 60.0)),
-    ///         ]),
-    ///     "data_gaps(tol=None) failed"
-    /// );
-    ///
-    /// // with a tolerance, we tolerate the given gap duration
-    /// tolerance = Some(Duration::from_seconds(3600.0));
-    /// let gaps : Vec<_> = rinex.data_gaps(tolerance).collect();
-    /// assert!(
-    ///     rinex.data_gaps(Some(Duration::from_seconds(3.0 * 3600.0))).eq(
-    ///         vec![
-    ///             (Epoch::from_str("2015-01-01T00:09:00 UTC").unwrap(), Duration::from_seconds(8.0 * 3600.0 + 51.0 * 60.0)),
-    ///             (Epoch::from_str("2015-01-01T09:04:00 UTC").unwrap(), Duration::from_seconds(10.0 * 3600.0 + 21.0 * 60.0)),
-    ///             (Epoch::from_str("2015-01-01T19:54:00 UTC").unwrap(), Duration::from_seconds(3.0 * 3600.0 + 1.0 * 60.0)),
-    ///         ]),
-    ///     "data_gaps(tol=3h) failed"
-    /// );
-    /// ```
-    pub fn data_gaps(
-        &self,
-        tolerance: Option<Duration>,
-    ) -> Box<dyn Iterator<Item = (Epoch, Duration)> + '_> {
-        let sample_rate: Duration = match tolerance {
-            Some(dt) => dt, // user defined
-            None => {
-                match self.dominant_sample_rate() {
-                    Some(dt) => dt,
-                    None => {
-                        match self.sample_rate() {
-                            Some(dt) => dt,
-                            None => {
-                                // not enough information
-                                // this is probably not an Epoch iterated RINEX
-                                return Box::new(Vec::<(Epoch, Duration)>::new().into_iter());
-                            },
-                        }
-                    },
-                }
-            },
-        };
-        Box::new(
-            self.epoch()
-                .zip(self.epoch().skip(1))
-                .filter_map(move |(ek, ekp1)| {
-                    let dt = ekp1 - ek; // gap
-                    if dt > sample_rate {
-                        // too large
-                        Some((ek, dt)) // retain starting datetime and gap duration
-                    } else {
-                        None
-                    }
-                }),
         )
     }
 }
@@ -2235,99 +1770,6 @@ impl Rinex {
             }
         }))
     }
-    /// Interpolates SV position, expressed in meters ECEF at desired Epoch `t`.
-    /// An interpolation order between 4 and 8 is recommended, depending on the
-    /// precision you are targetting. Higher orders do not make sense considering the
-    /// noise on broadcasted (real time) positions.
-    /// In ideal scenarios, Broadcast Ephemeris are complete and evenly spaced in time:
-    ///   - the first Epoch we an interpolate is ](N +1)/2 * τ; ...]
-    ///   - the last Epoch we an interpolate is  [..;  T - (N +1)/2 * τ]
-    /// where N is the interpolation order, τ the broadcast interval and T
-    /// the last broadcast message received.
-    /// This method is designed to minimize interpolation errors at the expense
-    /// of interpolatable Epochs. See [Bibliography::Japhet2021].
-    pub fn sv_position_interpolate(
-        &self,
-        sv: SV,
-        t: Epoch,
-        order: usize,
-    ) -> Option<(f64, f64, f64)> {
-        let odd_order = order % 2 > 0;
-        let dt = match self.sample_rate() {
-            Some(dt) => dt,
-            None => match self.dominant_sample_rate() {
-                Some(dt) => dt,
-                None => {
-                    /*
-                     * Can't determine anything: not enough information
-                     */
-                    return None;
-                },
-            },
-        };
-
-        let sv_position: Vec<_> = self
-            .sv_position()
-            .filter_map(|(e, svnn, (x, y, z))| {
-                if sv == svnn {
-                    Some((e, (x, y, z)))
-                } else {
-                    None
-                }
-            })
-            .collect();
-        /*
-         * Determine cloesest Epoch in time
-         */
-        let center = match sv_position.iter().find(|(e, _)| (*e - t).abs() < dt) {
-            Some(center) => center,
-            None => {
-                /*
-                 * Failed to determine central Epoch for this SV
-                 * empty data set: should not happen
-                 */
-                return None;
-            },
-        };
-        // println!("CENTRAL EPOCH: {:?}", center); // DEBUG
-        let center_pos = match sv_position.iter().position(|(e, _)| *e == center.0) {
-            Some(center) => center,
-            None => {
-                /* will never happen at this point */
-                return None;
-            },
-        };
-
-        let (min_before, min_after): (usize, usize) = match odd_order {
-            true => ((order + 1) / 2, (order + 1) / 2),
-            false => (order / 2, order / 2 + 1),
-        };
-
-        if center_pos < min_before || sv_position.len() - center_pos < min_after {
-            /* can't design time window */
-            return None;
-        }
-
-        let mut polynomials = (0.0_f64, 0.0_f64, 0.0_f64);
-        let offset = center_pos - min_before;
-
-        for i in 0..order + 1 {
-            let mut li = 1.0_f64;
-            let (e_i, (x_i, y_i, z_i)) = sv_position[offset + i];
-            for j in 0..order + 1 {
-                let (e_j, _) = sv_position[offset + j];
-                if j != i {
-                    li *= (t - e_j).to_seconds();
-                    li /= (e_i - e_j).to_seconds();
-                }
-            }
-            polynomials.0 += x_i * li;
-            polynomials.1 += y_i * li;
-            polynomials.2 += z_i * li;
-        }
-
-        Some(polynomials)
-    }
     /// Returns an Iterator over SV position vectors,
     /// expressed as geodetic coordinates, with latitude and longitude
     /// in decimal degrees.
@@ -2949,88 +2391,20 @@ impl Split for Rinex {
                 record: r0,
                 header: self.header.clone(),
                 comments: self.comments.clone(),
+                #[cfg(feature = "qc")]
                 prod_attr: self.prod_attr.clone(),
             },
             Self {
                 record: r1,
                 header: self.header.clone(),
                 comments: self.comments.clone(),
+                #[cfg(feature = "qc")]
                 prod_attr: self.prod_attr.clone(),
             },
         ))
     }
     fn split_dt(&self, _duration: Duration) -> Result<Vec<Self>, split::Error> {
         Ok(Vec::new())
-    }
-}
-
-#[cfg(feature = "qc")]
-#[cfg_attr(docrs, doc(cfg(feature = "qc")))]
-impl Rinex {
-    /// Returns dominant sample rate, ie., most common [Duration] between successive
-    /// [Epoch], discarding minor data gaps that may occur.
-    /// ```
-    /// use rinex::prelude::*;
-    /// let rnx = Rinex::from_file("../test_resources/MET/V2/abvi0010.15m")
-    ///     .unwrap();
-    /// assert_eq!(
-    ///     rnx.dominant_sample_rate(),
-    ///     Some(Duration::from_seconds(60.0)));
-    /// ```
-    pub fn dominant_sample_rate(&self) -> Option<Duration> {
-        self.sampling_histogram()
-            .max_by(|(_, pop_i), (_, pop_j)| pop_i.cmp(pop_j))
-            .map(|dominant| dominant.0)
-    }
-    /// Returns True if Self has a steady sampling, ie., made of evenly spaced [Epoch].
-    pub fn steady_sampling(&self) -> bool {
-        self.sampling_histogram().count() == 1
-    }
-}
-
-#[cfg(feature = "qc")]
-#[cfg_attr(docrs, doc(cfg(feature = "qc")))]
-impl Masking for Rinex {
-    fn mask(&self, f: &MaskFilter) -> Self {
-        let mut s = self.clone();
-        s.mask_mut(f);
-        s
-    }
-    fn mask_mut(&mut self, f: &MaskFilter) {
-        self.record.mask_mut(f);
-        self.header.mask_mut(f);
-    }
-}
-
-#[cfg(feature = "processing")]
-use crate::algorithm::Decimate;
-
-#[cfg(feature = "processing")]
-#[cfg_attr(docrs, doc(cfg(feature = "processing")))]
-impl Decimate for Rinex {
-    fn decimate_by_ratio(&self, r: u32) -> Self {
-        let mut s = self.clone();
-        s.decimate_by_ratio_mut(r);
-        s
-    }
-    fn decimate_by_ratio_mut(&mut self, r: u32) {
-        self.record.decimate_by_ratio_mut(r);
-    }
-    fn decimate_by_interval(&self, dt: Duration) -> Self {
-        let mut s = self.clone();
-        s.decimate_by_interval_mut(dt);
-        s
-    }
-    fn decimate_by_interval_mut(&mut self, dt: Duration) {
-        self.record.decimate_by_interval_mut(dt);
-    }
-    fn decimate_match_mut(&mut self, rhs: &Self) {
-        self.record.decimate_match_mut(&rhs.record);
-    }
-    fn decimate_match(&self, rhs: &Self) -> Self {
-        let mut s = self.clone();
-        s.decimate_match_mut(rhs);
-        s
     }
 }
 
@@ -3608,90 +2982,37 @@ impl Rinex {
     }
 }
 
-//    /// Generates a new RINEX = Self(=RINEX(A)) - RHS(=RINEX(B)).
-//    /// Therefore RHS is considered reference.
-//    /// This operation is typically used to compare two GNSS receivers.
-//    /// Both RINEX formats must match otherwise this will panic.
-//    /// This is only available to Observation RINEX files.
-//    pub fn substract(&self, rhs: &Self) -> Self {
-//        let mut record = observation::Record::default();
-//        let lhs_rec = self
-//            .record
-//            .as_obs()
-//            .expect("can only substract observation data");
-//
-//        let rhs_rec = rhs
-//            .record
-//            .as_obs()
-//            .expect("can only substract observation data");
-//
-//        for ((epoch, flag), (clk, svnn)) in lhs_rec {
-//            if let Some((ref_clk, ref_svnn)) = rhs_rec.get(&(*epoch, *flag)) {
-//                for (sv, observables) in svnn {
-//                    if let Some(ref_observables) = ref_svnn.get(sv) {
-//                        for (observable, observation) in observables {
-//                            if let Some(ref_observation) = ref_observables.get(observable) {
-//                                if let Some((_, c_svnn)) = record.get_mut(&(*epoch, *flag)) {
-//                                    if let Some(c_observables) = c_svnn.get_mut(sv) {
-//                                        c_observables.insert(
-//                                            observable.clone(),
-//                                            ObservationData {
-//                                                obs: observation.obs - ref_observation.obs,
-//                                                lli: None,
-//                                                snr: None,
-//                                            },
-//                                        );
-//                                    } else {
-//                                        // new observable
-//                                        let mut inner =
-//                                            HashMap::<Observable, ObservationData>::new();
-//                                        let observation = ObservationData {
-//                                            obs: observation.obs - ref_observation.obs,
-//                                            lli: None,
-//                                            snr: None,
-//                                        };
-//                                        inner.insert(observable.clone(), observation);
-//                                        c_svnn.insert(*sv, inner);
-//                                    }
-//                                } else {
-//                                    // new epoch
-//                                    let mut map = HashMap::<Observable, ObservationData>::new();
-//                                    let observation = ObservationData {
-//                                        obs: observation.obs - ref_observation.obs,
-//                                        lli: None,
-//                                        snr: None,
-//                                    };
-//                                    map.insert(observable.clone(), observation);
-//                                    let mut inner =
-//                                        BTreeMap::<SV, HashMap<Observable, ObservationData>>::new();
-//                                    inner.insert(*sv, map);
-//                                    if let Some(clk) = clk {
-//                                        if let Some(refclk) = ref_clk {
-//                                            record.insert(
-//                                                (*epoch, *flag),
-//                                                (Some(clk - refclk), inner),
-//                                            );
-//                                        } else {
-//                                            record.insert((*epoch, *flag), (None, inner));
-//                                        }
-//                                    } else {
-//                                        record.insert((*epoch, *flag), (None, inner));
-//                                    }
-//                                }
-//                            }
-//                        }
-//                    }
-//                }
-//            }
-//        }
-//
-//        Rinex::new(self.header.clone(), record::Record::ObsRecord(record))
-//    }
+use crate::observation::Substract;
 
-impl std::ops::Sub for Rinex {
-    type Output = Self;
-    fn sub(self, rhs: Rinex) -> Self::Output {
-        Self::default()
+impl Substract for Rinex {
+    fn substract(&self, rhs: &Self) -> Self {
+        let mut s = self.clone();
+        s.substract_mut(rhs);
+        s
+    }
+    fn substract_mut(&mut self, rhs: &Self) {
+        if let Some(lhs_obs) = self.record.as_mut_obs() {
+            if let Some(rhs_obs) = rhs.record.as_obs() {
+                lhs_obs.substract_mut(rhs_obs);
+            } else {
+                panic!("invalid differential ops");
+            }
+        //} else if let Some(lhs_doris) = self.record.as_mut_doris() {
+        //    if let Some(rhs_doris) = rhs.record.as_doris() {
+        //        lhs_obs.substract_mut(rhs_doris);
+        //    } else {
+        //        panic!("invalid differential ops");
+        //    }
+        //} else if let Some(lhs_met) = self.record.as_mut_meteo() {
+        //    if let Some(rhs_met) = rhs.record.as_meteo() {
+        //        lhs_met.substract_mut(rhs_met);
+        //    } else {
+        //        panic!("invalid differential ops");
+        //    }
+        } else {
+            //TODO
+            panic!("non supported ops");
+        }
     }
 }
 
@@ -3702,7 +3023,7 @@ mod test {
     #[test]
     fn test_macros() {
         assert_eq!(
-            observable!("L1C");
+            observable!("L1C"),
             Observable::Phase("L1C".to_string())
         );
     }

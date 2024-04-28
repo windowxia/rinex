@@ -205,9 +205,9 @@ pub type Observations = BTreeMap<ObservationKey, ObservationData>;
 #[derive(Debug, Clone, PartialEq)]
 pub struct RecordEntry {
     /// RX Clock offset to timescale, expressed in [s]
-    clock_offset: Option<f64>,
+    pub clock_offset: Option<f64>,
     /// List of observations
-    observations: Observations,
+    pub observations: Observations,
 }
 
 /// Returns true if given content matches a new OBSERVATION data epoch
@@ -1549,13 +1549,45 @@ impl Masking for Record {
 //     ret
 // }
 
+use crate::observation::Substract;
+
+impl Substract for Record {
+    fn substract(&self, rhs: &Self) -> Self {
+        let mut s = self.clone();
+        s.substract_mut(rhs);
+        s
+    }
+    fn substract_mut(&mut self, rhs: &Self) {
+        self.retain(|k, v| {
+            if let Some(ref_v) = rhs.get(&k) {
+                v.observations.retain(|k, obs_data| {
+                    if let Some(ref_data) = ref_v.observations.get(&k) {
+                        obs_data.value -= ref_data.value;
+                        true
+                    } else {
+                        false
+                    }
+                });
+                !v.observations.is_empty()
+            } else {
+                false
+            }
+        });
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::observation::HeaderFields;
+    use crate::{
+        observation::{
+            HeaderFields,
+        },
+        prelude::{Version, EpochFlag, TimeScale, Header},
+        epoch::parse_utc as utc_epoch_parser,
+    };
+    use super::{parse_epoch, fmt_epoch, is_new_epoch};
     fn parse_and_format_helper(ver: Version, epoch_str: &str, expected_flag: EpochFlag) {
-        let first = epoch::parse_utc("2020 01 01 00 00  0.1000000").unwrap();
-        let data: BTreeMap<SV, HashMap<Observable, ObservationData>> = BTreeMap::new();
+        let first = utc_epoch_parser("2020 01 01 00 00  0.1000000").unwrap();
         let obs_header = HeaderFields::default().with_time_of_first_obs(first);
 
         let header = Header::default()
@@ -1569,40 +1601,12 @@ mod test {
         assert!(content.is_ok(), "failed to parse \"{}\"", epoch_str);
 
         let (key, entry) = content.unwrap();
-
-        match expected_flag {
-            EpochFlag::Ok | EpochFlag::PowerFailure | EpochFlag::CycleSlip => {
-                assert!(key.flag.is_ok())
-            },
-            _ => {
-                // TODO: Update alongside parse_event
-                assert!(key.flag.is_err());
-                return;
-            },
-        }
-        let ((e, flag), _, _) = e.unwrap();
-        assert_eq!(flag, expected_flag);
-        if ver.major < 3 {
-            assert_eq!(
-                fmt_epoch_v2(e, flag, &clock_offset, &data, &header)
-                    .lines()
-                    .next()
-                    .unwrap(),
-                epoch_str
-            );
-        } else {
-            assert_eq!(
-                fmt_epoch_v3(e, flag, &clock_offset, &data, &header)
-                    .lines()
-                    .next()
-                    .unwrap(),
-                epoch_str
-            );
-        }
+        let formatted = fmt_epoch(&header, key, entry);
+        assert!(formatted.is_ok(), "failed to format epoch");
+        assert_eq!(formatted, epoch_str, "epoch formatting reciprocal");
     }
-
     #[test]
-    fn obs_v2_parse_and_format() {
+    fn test_v2_parse_and_format() {
         parse_and_format_helper(
             Version { major: 2, minor: 0 },
             " 21 12 21  0  0 30.0000000  0  0",
@@ -1640,7 +1644,7 @@ mod test {
         );
     }
     #[test]
-    fn obs_v3_parse_and_format() {
+    fn test_v3_parse_and_format() {
         parse_and_format_helper(
             Version { major: 3, minor: 0 },
             "> 2021 12 21 00 00 30.0000000  0  0",
@@ -1678,7 +1682,7 @@ mod test {
         );
     }
     #[test]
-    fn obs_record_is_new_epoch() {
+    fn test_is_new_epoch() {
         assert!(is_new_epoch(
             "95 01 01 00 00 00.0000000  0  7 06 17 21 22 23 28 31",
             Version { major: 2, minor: 0 }
