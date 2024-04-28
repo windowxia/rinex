@@ -1,13 +1,12 @@
 //! RINEX Clock files parser & analysis
 pub mod record;
 
+use crate::{prelude::DOMES, version::Version};
+
 pub use record::{ClockKey, ClockProfile, ClockProfileType, ClockType, Error, Record};
 
-use crate::version::Version;
 use hifitime::TimeScale;
 use std::str::FromStr;
-
-use crate::domes::DOMES;
 
 /// Clocks `RINEX` specific header fields
 #[derive(Clone, Debug, Default, PartialEq)]

@@ -410,8 +410,11 @@ impl Mask for Record {
 mod test {
     use super::{is_new_epoch, parse_epoch};
     use crate::{
-        domes::TrackingPoint as DomesTrackingPoint, domes::DOMES, doris::record::ObservationData,
-        doris::HeaderFields as DorisHeader, doris::Station, Epoch, EpochFlag, Header, Observable,
+        doris::record::ObservationData,
+        doris::HeaderFields as DorisHeader,
+        doris::Station,
+        prelude::{DomesTrackingPoint, DOMES},
+        Epoch, EpochFlag, Header, Observable,
     };
     use std::str::FromStr;
     #[test]

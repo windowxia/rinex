@@ -8,8 +8,6 @@ extern crate gnss_rs as gnss;
 pub mod antex;
 pub mod carrier;
 pub mod clock;
-pub mod cospar;
-pub mod domes;
 pub mod doris;
 pub mod epoch;
 pub mod gnss_time;
@@ -83,7 +81,6 @@ pub mod prelude {
     pub use crate::clock::{ClockKey, ClockProfile, ClockProfileType, ClockType, WorkClock};
     #[cfg(feature = "sp3")]
     pub use crate::context::{ProductType, RnxContext};
-    pub use crate::domes::DOMES;
     #[cfg(feature = "doris")]
     pub use crate::doris::{ObservationData as DorisObservationData, Station};
     pub use crate::ground_position::GroundPosition;
@@ -93,8 +90,8 @@ pub mod prelude {
     pub use crate::types::Type as RinexType;
     pub use crate::Error;
     pub use crate::Rinex;
-    pub use gnss::prelude::Constellation;
-    pub use gnss::prelude::SV;
+    // gnss_rs re-export
+    pub use gnss::prelude::{Constellation, DomesTrackingPoint, COSPAR, DOMES, SV};
     pub use hifitime::{Duration, Epoch, TimeScale, TimeSeries};
 }
 

@@ -18,4 +18,6 @@ all-features = true
 rustdoc-args = ["--cfg", "docrs", "--generate-link-to-definition"]
 
 [dependencies]
+gnss-rs = { path = "../../rtk-rs/gnss" }
 horrorshow = "0.8"
+hifitime = { version = "3.9.0", features = ["serde", "std"] }

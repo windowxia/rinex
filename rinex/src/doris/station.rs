@@ -1,5 +1,6 @@
 //! DORIS Station
-use crate::{domes::DOMES, doris::Error};
+use crate::doris::Error;
+use gnss_rs::prelude::DOMES;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -75,7 +76,7 @@ impl std::fmt::Display for Station {
 #[cfg(test)]
 mod test {
     use super::Station;
-    use crate::domes::{TrackingPoint as DomesTrackingPoint, DOMES};
+    use gnss_rs::prelude::{DomesTrackingPoint, DOMES};
     use std::str::FromStr;
     #[test]
     fn station_parsing() {

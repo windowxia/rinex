@@ -2,7 +2,6 @@ use std::str::FromStr;
 use thiserror::Error;
 
 use crate::{
-    domes::{Error as DomesParsingError, DOMES},
     navigation,
     navigation::{FrameClass, NavMsgType},
     observable,
@@ -10,7 +9,7 @@ use crate::{
     prelude::*,
 };
 
-// use gnss::prelude::{Constellation, SV};
+use gnss::{domes::Error as DomesParsingError, prelude::DOMES};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -241,8 +240,6 @@ impl TargetItem {
     }
 }
 
-
-
 impl std::str::FromStr for TargetItem {
     type Err = Error;
     fn from_str(content: &str) -> Result<Self, Self::Err> {
@@ -404,8 +401,8 @@ impl std::fmt::Display for TargetItem {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::domes::TrackingPoint as DomesTrackingPoint;
     use crate::Observable;
+    use gnss_rs::prelude::DomesTrackingPoint;
     use std::str::FromStr;
     #[test]
     fn algo_target_item() {

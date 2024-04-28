@@ -3,8 +3,6 @@ use crate::{
     antex, clock,
     clock::ClockProfileType,
     clock::WorkClock,
-    cospar::{Error as CosparError, COSPAR},
-    domes::DOMES,
     doris::{Error as DorisError, HeaderFields as DorisHeader, Station as DorisStation},
     fmt_comment, fmt_rinex,
     ground_position::GroundPosition,
@@ -35,7 +33,11 @@ use std::str::FromStr;
 use hifitime::{Epoch, Unit};
 use thiserror::Error;
 
-use gnss::constellation::ParsingError as ConstellationParsingError;
+use gnss::{
+    constellation::ParsingError as ConstellationParsingError,
+    cospar::Error as CosparError,
+    prelude::{COSPAR, DOMES},
+};
 
 #[cfg(feature = "serde")]
 use serde::Serialize;

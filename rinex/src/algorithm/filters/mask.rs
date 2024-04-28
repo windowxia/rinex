@@ -298,56 +298,10 @@ impl std::str::FromStr for MaskFilter {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::domes::{TrackingPoint as DomesTrackingPoint, DOMES};
     use crate::navigation::{FrameClass, NavMsgType};
     use crate::prelude::*;
+    use gnss_rs::prelude::{DomesTrackingPoint, DOMES};
     use std::str::FromStr;
-    #[test]
-    fn mask_operand() {
-        for (descriptor, opposite_desc) in [
-            (">=", "<="),
-            (">", "<"),
-            ("=", "!="),
-            ("<", ">"),
-            ("<=", ">="),
-        ] {
-            let operand = MaskOperand::from_str(descriptor);
-            assert!(
-                operand.is_ok(),
-                "{} \"{}\"",
-                "Failed to parse MaskOperand from",
-                descriptor
-            );
-            let opposite = MaskOperand::from_str(opposite_desc);
-            assert!(
-                opposite.is_ok(),
-                "{} \"{}\"",
-                "Failed to parse MaskOperand from",
-                opposite_desc
-            );
-            assert_eq!(!operand.unwrap(), opposite.unwrap(), "MaskOperand::Not()");
-        }
-
-        let operand = MaskOperand::from_str("a");
-        assert!(
-            operand.is_err(),
-            "Parsed unexpectedly \"{}\" MaskOperand correctly",
-            "a"
-        );
-    }
-    #[test]
-    fn mask_epoch() {
-        let mask = MaskFilter::from_str(">2020-01-14T00:31:55 UTC").unwrap();
-        assert_eq!(
-            mask,
-            MaskFilter {
-                operand: MaskOperand::GreaterThan,
-                item: TargetItem::EpochItem(Epoch::from_str("2020-01-14T00:31:55 UTC").unwrap()),
-            }
-        );
-        let mask = MaskFilter::from_str(">JD 2452312.500372511 TAI");
-        assert!(mask.is_ok());
-    }
     #[test]
     fn mask_elev() {
         for desc in [

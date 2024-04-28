@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod test {
-    use crate::domes::TrackingPoint as DomesTrackingPoint;
     use crate::prelude::*;
+    use gnss_rs::prelude::DomesTrackingPoint;
     use std::str::FromStr;
     #[test]
     fn clk_v2_cod20352() {
