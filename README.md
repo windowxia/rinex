@@ -11,24 +11,23 @@ RINEX
 
 Rust tool suites to parse, analyze and process [RINEX Data](https://en.wikipedia.org/wiki/RINEX).
 
-The [Wiki pages](https://github.com/georust/rinex/wiki) is the main documentation portal. It contains
+The [Wiki pages](https://github.com/georust/rinex/wiki) are the main documentation. They contain
 several examples spanning different GNSS applications.
 
-If you have any question or experience any problems, feel free to open an issue on Github.  
-You can also contact us [on our Discord channel](https://discord.gg/Fp2aape)
+Use the [Github Issues](https://github.com/georust/rinex/issues) to report bugs by following our quick procedure.  
+Open a [Discussion](https://github.com/georust/rinex/discussions) or reach out to us on [Discord](https://discord.gg/Fp2aape) 
+for any questions.
 
 ## Advantages :rocket: 
 
-- Fast :crab:
+- Fast data browsing
+- Fast SPP/PPP solution solver
 - Open sources
-- Seamless Hatanaka compression and decompression
-- Seamless Gzip decompression with `flate2` build option
-- RINEX V4 full support
-- Meteo RINEX full support
-- IONEX 2D support. Partial IONEX 3D support.
-- Partial ANTEX support
-- Full support of High Precision Clock RINEX products
-- Full support of [SP3](https://docs.rs/sp3/1.0.7/sp3/) High precision orbit products
+- Seamless yet efficient Hatanaka and Gzip compression
+- RINEX V4 fully supported
+- All RINEX format supported
+- DORIS, IONEX and ANTEX support
+- SP3 (high precision orbits) fully supported
 - Several pre processing algorithms:
   - [File merging](https://github.com/georust/rinex/wiki/file-merging)
   - [Time binning](https://github.com/georust/rinex/wiki/time-binning)
@@ -47,35 +46,31 @@ You can also contact us [on our Discord channel](https://discord.gg/Fp2aape)
 ## Disadvantages :warning:
 
 - QZNSST is represented as GPST at the moment.
-- We're waiting for Hifitime V4 to support GLONASST and IRNSST.   
-Until then, orbital calculations on these systems are not feasible.   
-In other term, positioning is not feasible and you're limited to basic analysis. 
-- These tools are oriented towards the latest revisions of the RINEX format.
-RINEX4 is out and we already support it. 
-Some minor features in the RINEX2 or 3 revisions may not be supported.
-- Our command line applications do not accept BINEX or other proprietary formats
-- File production is not fully concluded to this day. We're currently focused
-on RINEX post processing rather than RINEX data production. Do not hesitate to fork and submit
-your improvements
+- GLONASST, IRNSST are not supported yet
+- SPP/PPP solving only feasible with GPS and Galileo at the moment
+- We cannot process proprietary formats like BINEX
+- Some data production features might be missing as we're currently focused
+on data processing
 
 ## Repository 
 
 * [`rinex`](rinex/) is the core library 
-* [`rinex-cli`](rinex-cli/) : an application dedicated to RINEX post processing.
-It supports some of `teqc` operations.
-It integrates a position solver and can format CGGTTS tracks for clock comparison.
+* [`rinex-cli`](rinex-cli/) : RINEX post processing
+and broader GNSS processing by command line (no GUI available yet).
+It's growing as some sort of Anubis + glab + Rtklib combination.
+It also supports some operations that are similar to `teqc`.
+It can generate PVT and CGGTTS solutions, QC reports or can be used as a data extractor
+to third party tools.
 The application is auto-generated for a few architectures, download it from the 
 [release portal](https://github.com/georust/rinex/releases)
 
 * [`sp3`](sp3/) High Precision Orbits (by IGS) 
-* [`rnx2crx`](rnx2crx/) is a RINEX compressor (RINEX to Compact RINEX)
-* [`crx2rnx`](crx2rnx/) is a CRINEX decompresor (Compact RINEX to RINEX)
-* [`rinex-qc`](rinex-qc/) is a library dedicated to RINEX files analysis 
-* [`qc-traits`](qc-traits/) declares Traits that are shared between `rinex` and `rinex-qc`
-* [`sinex`](sinex/) SNX dedicated core library
-
-* [`ublox-rnx`](ublox-rnx/) is an application intended to generate RINEX Data
-from raw uBlox GNSS receiver frames. This application is work in progress at the moment.
+* [`rinex-qc`](rinex-qc/) is a library dedicated to RINEX and GNSS data analysis and processing.
+* [`qc-traits`](qc-traits/) is where analysis and processing Traits are declared
+* [`sinex`](sinex/) SINEX dedicated core library, is work in progress and not integrated
+to the processing toolbox yet.
+* [`ublox-rnx`](ublox-rnx/) is an application intended to generate RINEX files
+from a uBlox receiver. This application is work in progress at the moment.
 
 ## Other tools and relevant Ecosystems
 
@@ -113,7 +108,7 @@ RINEX formats & applications
 |  Clocks (CLK)              | :heavy_check_mark:| :construction:      | :heavy_check_mark: :chart_with_upwards_trend:  | Precise SV and Reference Clock states |  Epoch | UTC |
 |  Antenna (ATX)             | :heavy_check_mark:| :construction:      | :construction:   | Precise RX/SV Antenna calibration | `antex::Antenna` | :heavy_minus_sign: |
 |  Ionosphere Maps  (IONEX)  | :heavy_check_mark:|  :construction:     | :heavy_check_mark:  :chart_with_upwards_trend: | Ionosphere Electron density | Epoch | UTC |
-|  DORIS RINEX               | :heavy_check_mark:|  :construction:     | :construction:       | DORIS Measurements | Epoch | TAI |
+|  DORIS RINEX               | :heavy_check_mark:|  :construction:     | :construction:       | Phase, Pseudo Range, Temperature and other measurements | Epoch | TAI |
 |  SINEX  (SNX)              | :construction:    |  :construction:     | :heavy_minus_sign:   | SINEX are special RINEX, they are managed by a dedicated [core library](sinex/) | Epoch | :question: |
 |  Troposphere  (TRO)        | :construction:    |  :construction:     | :question:           | Troposphere modeling | Epoch | :question: |
 |  Bias  (BIA)               | :heavy_check_mark: |  :construction:    | :question:           | Bias estimates, like DCB.. | Epoch | :question: |
@@ -143,8 +138,8 @@ File formats
 | CRINEX                 | :heavy_minus_sign:                | :heavy_check_mark:                 | 
 | gzip compressed RINEX  | Name must end with `.gz`          | `--flate2` feature must be enabled |
 | gzip compressed CRINEX | Name must end with `.gz`          | `--flate2` feature must be enabled |
-| DORIS RINEX            | :construction: Work in progress   | :construction: Work in progress    |
-| gzip compressed DORIS  | :construction: Work in progress   | :construction: Work in progress    |
+| DORIS RINEX            | :heavy_minus_sign:                | :heavy_check_mark:                 |
+| gzip compressed DORIS  | Name must end with `.gz`          | `--flate2` feature must be enabled |
 | SP3                    | :heavy_minus_sign:                | :heavy_check_mark:                 | 
 | gzip compressed SP3    | Name must end with `.gz`          | `--flate2` feature must be enabled | 
 | BINEX                  | :heavy_minus_sign:                | :heavy_minus_sign: We do not support proprietary formats |
@@ -165,7 +160,4 @@ our countless discussions. Check out his
 Contributions
 =============
 
-Contributions are welcomed, do not hesitate to open new issues
-and submit Pull Requests through Github.
-
-If you want to take part in active developments, check out our [contribution guidelines and hints](CONTRIBUTING.md) to navigate this library quicker.
+[Contribution guidelines and hints](CONTRIBUTING.md) will help you navigate this toolbox quicker.
