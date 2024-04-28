@@ -9,12 +9,12 @@ RINEX
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square)](https://github.com/georust/rinex/blob/main/LICENSE-APACHE)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](https://github.com/georust/rinex/blob/main/LICENSE-MIT) 
 
-Rust tool suites to parse, analyze and process [RINEX Data](https://en.wikipedia.org/wiki/RINEX).
+Toolbox written in Rust to parse, analyze and process [RINEX files](https://en.wikipedia.org/wiki/RINEX).
 
-The [Wiki pages](https://github.com/georust/rinex/wiki) are the main documentation. They contain
-several examples spanning different GNSS applications.
+The [Wiki pages](https://github.com/georust/rinex/wiki) are the main documentation.   
+They contain several examples spanning different GNSS applications.
 
-Use the [Github Issues](https://github.com/georust/rinex/issues) to report bugs by following our quick procedure.  
+Use [Github Issues](https://github.com/georust/rinex/issues) to report bugs by following our quick procedure.  
 Open a [Discussion](https://github.com/georust/rinex/discussions) or reach out to us on [Discord](https://discord.gg/Fp2aape) 
 for any questions.
 
