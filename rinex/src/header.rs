@@ -2202,9 +2202,26 @@ impl Merge for Header {
 use horrorshow::{helper::doctype, RenderBox};
 
 #[cfg(feature = "qc")]
+use rinex_qc_traits::{MaskFilter, Masking};
+
+#[cfg(feature = "qc")]
+#[cfg_attr(docrs, doc(cfg(feature = "qc")))]
+impl Masking for Header {
+    fn mask(&self, f: &MaskFilter) -> Self {
+        let mut s = self.clone();
+        s.mask_mut(f);
+        s
+    }
+    fn mask_mut(&mut self, f: &MaskFilter) {
+        //TODO
+    }
+}
+
+#[cfg(feature = "qc")]
 use rinex_qc_traits::HtmlReport;
 
 #[cfg(feature = "qc")]
+#[cfg_attr(docrs, doc(cfg(feature = "qc")))]
 impl HtmlReport for Header {
     fn to_html(&self) -> String {
         format!(

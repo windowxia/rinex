@@ -8,7 +8,7 @@ use crate::{
     header::Header,
     observable::Observable,
     observation::EpochFlag,
-    prelude::{Duration, TimeScale},
+    prelude::TimeScale,
 };
 
 #[cfg(feature = "serde")]

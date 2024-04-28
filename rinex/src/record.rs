@@ -5,6 +5,9 @@ use thiserror::Error;
 #[cfg(feature = "serde")]
 use serde::Serialize;
 
+#[cfg(feature = "qc")]
+use rinex_qc_traits::{MaskFilter, Masking};
+
 use super::{
     antex, clock,
     clock::{ClockKey, ClockProfile},
@@ -163,25 +166,25 @@ impl Record {
                 let record = self.as_obs().unwrap();
                 let obs_fields = &header.obs.as_ref().unwrap();
                 let mut compressor = Compressor::default();
-                for ((epoch, flag), (clock_offset, data)) in record.iter() {
-                    let epoch =
-                        observation::record::fmt_epoch(*epoch, *flag, clock_offset, data, header);
-                    if obs_fields.crinex.is_some() {
-                        let major = header.version.major;
-                        let constell = &header.constellation.as_ref().unwrap();
-                        for line in epoch.lines() {
-                            let line = line.to_owned() + "\n"; // helps the following .lines() iterator
-                                                               // embedded in compression method
-                            if let Ok(compressed) =
-                                compressor.compress(major, &obs_fields.codes, constell, &line)
-                            {
-                                // println!("compressed \"{}\"", compressed); // DEBUG
-                                writeln!(writer, "{}", compressed)?;
-                            }
-                        }
-                    } else {
-                        writeln!(writer, "{}", epoch)?;
-                    }
+                for (k, v) in record.iter() {
+                    //    let epoch =
+                    //        observation::record::fmt_epoch(*epoch, *flag, clock_offset, data, header);
+                    //    if obs_fields.crinex.is_some() {
+                    //        let major = header.version.major;
+                    //        let constell = &header.constellation.as_ref().unwrap();
+                    //        for line in epoch.lines() {
+                    //            let line = line.to_owned() + "\n"; // helps the following .lines() iterator
+                    //                                               // embedded in compression method
+                    //            if let Ok(compressed) =
+                    //                compressor.compress(major, &obs_fields.codes, constell, &line)
+                    //            {
+                    //                // println!("compressed \"{}\"", compressed); // DEBUG
+                    //                writeln!(writer, "{}", compressed)?;
+                    //            }
+                    //        }
+                    //    } else {
+                    //        writeln!(writer, "{}", epoch)?;
+                    //    }
                 }
             },
             Type::NavigationData => {
@@ -303,10 +306,10 @@ pub fn parse_record(
     // record
     let mut atx_rec = antex::Record::new(); // ATX
     let mut nav_rec = navigation::Record::new(); // NAV
-    let mut obs_rec = observation::Record::new(); // OBS
     let mut met_rec = meteo::Record::new(); // MET
     let mut clk_rec = clock::Record::new(); // CLK
     let mut dor_rec = doris::Record::new(); // DORIS
+    let mut obs_rec = observation::Record::new(); // OBS
 
     // OBSERVATION case
     //  timescale is defined either
@@ -432,11 +435,11 @@ pub fn parse_record(
                         }
                     },
                     Type::ObservationData => {
-                        if let Ok((e, ck_offset, map)) =
+                        if let Ok((k, v)) =
                             observation::record::parse_epoch(header, &epoch_content, obs_ts)
                         {
-                            obs_rec.insert(e, (ck_offset, map));
-                            comment_ts = e.0; // for comments classification & management
+                            comment_ts = k.epoch; // for comments classification & management
+                            obs_rec.insert(k, v);
                         }
                     },
                     Type::DORIS => {
@@ -536,11 +539,9 @@ pub fn parse_record(
             }
         },
         Type::ObservationData => {
-            if let Ok((e, ck_offset, map)) =
-                observation::record::parse_epoch(header, &epoch_content, obs_ts)
-            {
-                obs_rec.insert(e, (ck_offset, map));
-                comment_ts = e.0; // for comments classification + management
+            if let Ok((k, v)) = observation::record::parse_epoch(header, &epoch_content, obs_ts) {
+                comment_ts = k.epoch; // for comments classification + management
+                obs_rec.insert(k, v);
             }
         },
         Type::DORIS => {
@@ -682,92 +683,28 @@ impl Split for Record {
     }
 }
 
-#[cfg(feature = "processing")]
-use crate::algorithm::{Filter, Preprocessing};
-
-#[cfg(feature = "processing")]
-impl Preprocessing for Record {
-    fn filter(&self, f: Filter) -> Self {
+#[cfg(feature = "qc")]
+#[cfg_attr(docrs, doc(cfg(feature = "qc")))]
+impl Masking for Record {
+    fn mask(&self, f: &MaskFilter) -> Self {
         let mut s = self.clone();
-        s.filter_mut(f);
+        s.mask_mut(f);
         s
     }
-    fn filter_mut(&mut self, f: Filter) {
+    fn mask_mut(&mut self, f: &MaskFilter) {
         if let Some(r) = self.as_mut_obs() {
-            r.filter_mut(f);
-        } else if let Some(r) = self.as_mut_nav() {
-            r.filter_mut(f);
-        } else if let Some(r) = self.as_mut_clock() {
-            r.filter_mut(f);
-        } else if let Some(r) = self.as_mut_meteo() {
-            r.filter_mut(f);
-        } else if let Some(r) = self.as_mut_ionex() {
-            r.filter_mut(f);
-        } else if let Some(r) = self.as_mut_doris() {
-            r.filter_mut(f);
+            r.mask_mut(f);
         }
-    }
-}
-
-#[cfg(feature = "processing")]
-use crate::algorithm::Decimate;
-
-#[cfg(feature = "processing")]
-impl Decimate for Record {
-    fn decimate_by_ratio(&self, r: u32) -> Self {
-        let mut s = self.clone();
-        s.decimate_by_ratio_mut(r);
-        s
-    }
-    fn decimate_by_ratio_mut(&mut self, r: u32) {
-        if let Some(rec) = self.as_mut_obs() {
-            rec.decimate_by_ratio_mut(r);
-        } else if let Some(rec) = self.as_mut_nav() {
-            rec.decimate_by_ratio_mut(r);
-        } else if let Some(rec) = self.as_mut_meteo() {
-            rec.decimate_by_ratio_mut(r);
-        } else if let Some(rec) = self.as_mut_doris() {
-            rec.decimate_by_ratio_mut(r);
-        }
-    }
-    fn decimate_by_interval(&self, dt: Duration) -> Self {
-        let mut s = self.clone();
-        s.decimate_by_interval_mut(dt);
-        s
-    }
-    fn decimate_by_interval_mut(&mut self, dt: Duration) {
-        if let Some(rec) = self.as_mut_obs() {
-            rec.decimate_by_interval_mut(dt);
-        } else if let Some(rec) = self.as_mut_nav() {
-            rec.decimate_by_interval_mut(dt);
-        } else if let Some(rec) = self.as_mut_meteo() {
-            rec.decimate_by_interval_mut(dt);
-        } else if let Some(rec) = self.as_mut_doris() {
-            rec.decimate_by_interval_mut(dt);
-        }
-    }
-    fn decimate_match(&self, rhs: &Self) -> Self {
-        let mut s = self.clone();
-        s.decimate_match_mut(rhs);
-        s
-    }
-    fn decimate_match_mut(&mut self, rhs: &Self) {
-        if let Some(rec) = self.as_mut_obs() {
-            if let Some(rhs) = rhs.as_obs() {
-                rec.decimate_match_mut(rhs);
-            }
-        } else if let Some(rec) = self.as_mut_nav() {
-            if let Some(rhs) = rhs.as_nav() {
-                rec.decimate_match_mut(rhs);
-            }
-        } else if let Some(rec) = self.as_mut_meteo() {
-            if let Some(rhs) = rhs.as_meteo() {
-                rec.decimate_match_mut(rhs);
-            }
-        } else if let Some(rec) = self.as_mut_doris() {
-            if let Some(rhs) = rhs.as_doris() {
-                rec.decimate_match_mut(rhs);
-            }
-        }
+        //} else if let Some(r) = self.as_mut_nav() {
+        //    r.mask_mut(f);
+        //} else if let Some(r) = self.as_mut_clock() {
+        //    r.mask_mut(f);
+        //} else if let Some(r) = self.as_mut_meteo() {
+        //    r.mask_mut(f);
+        //} else if let Some(r) = self.as_mut_ionex() {
+        //    r.mask_mut(f);
+        //} else if let Some(r) = self.as_mut_doris() {
+        //    r.mask_mut(f);
+        //}
     }
 }

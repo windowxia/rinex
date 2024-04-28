@@ -43,10 +43,6 @@ antex = []
 # wrapped as RINEX observation file.
 doris = []
 
-# Unlock Processing package.
-# Unlocks the preprocessing toolkit, Filtering methods and preprocessing algorithms.
-processing = []
-
 # Unlock Quality Check (QC) methods and traits.
 # Allows to generate complete QC reports for RINEX or entire contexts.
 qc = ["rinex-qc-traits", "horrorshow"] 
@@ -66,7 +62,6 @@ full = [
     "meteo",
     "nav",
     "obs",
-    "processing",
     "qc",
     "serde",
     "sp3",

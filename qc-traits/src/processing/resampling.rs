@@ -1,7 +1,5 @@
-use super::{Error, Token};
+use super::Error;
 use crate::processing::MaskFilter;
-use gnss_rs::prelude::{Constellation, COSPAR, DOMES, SV};
-use hifitime::{Duration, Epoch};
 use std::str::FromStr;
 
 /// Supported Decimation Filters
@@ -46,8 +44,6 @@ pub struct ResamplingFilter {
 
 impl ResamplingFilter {
     pub(crate) fn parse_decimation(s: &str) -> Result<Self, Error> {
-        let mut mask = Option::<MaskFilter>::None;
-        let mut decim = DecimationFilter::default();
         match s.find('*') {
             Some(offset) => {
                 let mask = MaskFilter::from_str(s[..offset].trim())?;

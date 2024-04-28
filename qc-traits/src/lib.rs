@@ -6,4 +6,4 @@ mod html;
 pub use html::HtmlReport;
 
 mod processing;
-pub use processing::{Filter, MaskFilter, Masking, Preprocessing};
+pub use processing::{Filter, MaskFilter, MaskOperand, MaskToken, Masking, Preprocessing};

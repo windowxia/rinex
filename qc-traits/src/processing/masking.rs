@@ -1,6 +1,4 @@
-use super::{Error, Token};
-use gnss_rs::prelude::{Constellation, COSPAR, DOMES, SV};
-use hifitime::{Duration, Epoch};
+use super::{Error, MaskToken};
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Default)]
 pub enum MaskOperand {
@@ -79,8 +77,8 @@ impl std::ops::Not for MaskOperand {
 /// Mask filter to retain or discard data subsets
 #[derive(Debug, PartialEq)]
 pub struct MaskFilter {
-    /// [Token]
-    pub token: Token,
+    /// [MaskToken]
+    pub token: MaskToken,
     /// [MaskOperand] to describe how to handle [FilterItem]
     pub operand: MaskOperand,
 }
@@ -91,42 +89,42 @@ impl std::str::FromStr for MaskFilter {
         if s.starts_with("dt") {
             let operand = MaskOperand::from_str(&s[2..])?;
             let offset = operand.formatted_len() + 2;
-            let token = Token::parse_duration(&s[offset..])?;
+            let token = MaskToken::parse_duration(&s[offset..])?;
             Ok(Self { token, operand })
         } else if s.starts_with("sta") {
             let operand = MaskOperand::from_str(&s[3..])?;
             let offset = operand.formatted_len() + 3;
-            let token = Token::parse_stations(&s[offset..])?;
+            let token = MaskToken::parse_stations(&s[offset..])?;
             Ok(Self { token, operand })
         } else if s.starts_with("dom") {
             let operand = MaskOperand::from_str(&s[3..])?;
             let offset = operand.formatted_len() + 3;
-            let token = Token::parse_domes_sites(&s[offset..])?;
+            let token = MaskToken::parse_domes_sites(&s[offset..])?;
             Ok(Self { token, operand })
         } else if s.starts_with('t') {
             let operand = MaskOperand::from_str(&s[1..])?;
             let offset = operand.formatted_len() + 1;
-            let token = Token::parse_epoch(&s[offset..])?;
+            let token = MaskToken::parse_epoch(&s[offset..])?;
             Ok(Self { token, operand })
         } else if s.starts_with('e') {
             let operand = MaskOperand::from_str(&s[1..])?;
             let offset = operand.formatted_len() + 1;
-            let token = Token::parse_elevation(&s[offset..])?;
+            let token = MaskToken::parse_elevation(&s[offset..])?;
             Ok(Self { token, operand })
         } else if s.starts_with("az") {
             let operand = MaskOperand::from_str(&s[2..])?;
             let offset = operand.formatted_len() + 2;
-            let token = Token::parse_azimuth(&s[offset..])?;
+            let token = MaskToken::parse_azimuth(&s[offset..])?;
             Ok(Self { token, operand })
         } else if s.starts_with('c') {
             let operand = MaskOperand::from_str(&s[1..])?;
             let offset = operand.formatted_len() + 1;
-            let token = Token::parse_constellations(&s[offset..])?;
+            let token = MaskToken::parse_constellations(&s[offset..])?;
             Ok(Self { token, operand })
         } else if s.starts_with('f') {
             let operand = MaskOperand::from_str(&s[1..])?;
             let offset = operand.formatted_len() + 1;
-            let token = Token::parse_frequencies(&s[offset..])?;
+            let token = MaskToken::parse_frequencies(&s[offset..])?;
             Ok(Self { token, operand })
         } else if s.starts_with('o') {
             let operand = MaskOperand::from_str(&s[1..])?;
@@ -138,7 +136,7 @@ impl std::str::FromStr for MaskFilter {
                 .collect::<Vec<_>>();
             Ok(Self {
                 operand,
-                token: Token::Observables(observables),
+                token: MaskToken::Observables(observables),
             })
         } else {
             Err(Error::InvalidMask)
@@ -159,7 +157,7 @@ pub trait Masking {
 #[cfg(test)]
 mod test {
     use super::{MaskFilter, MaskOperand};
-    use crate::processing::Token;
+    use crate::processing::MaskToken;
     use gnss_rs::prelude::{DomesTrackingPoint, DOMES};
     use hifitime::{Duration, Epoch};
     use std::str::FromStr;
@@ -186,35 +184,35 @@ mod test {
                 "dt=1 hour",
                 MaskFilter {
                     operand: MaskOperand::Equals,
-                    token: Token::Duration(Duration::from_hours(1.0)),
+                    token: MaskToken::Duration(Duration::from_hours(1.0)),
                 },
             ),
             (
                 "dt=30 s",
                 MaskFilter {
                     operand: MaskOperand::Equals,
-                    token: Token::Duration(Duration::from_seconds(30.0)),
+                    token: MaskToken::Duration(Duration::from_seconds(30.0)),
                 },
             ),
             (
                 "dt>30 s",
                 MaskFilter {
                     operand: MaskOperand::GreaterThan,
-                    token: Token::Duration(Duration::from_seconds(30.0)),
+                    token: MaskToken::Duration(Duration::from_seconds(30.0)),
                 },
             ),
             (
                 "dt<1 min",
                 MaskFilter {
                     operand: MaskOperand::LowerThan,
-                    token: Token::Duration(Duration::from_seconds(60.0)),
+                    token: MaskToken::Duration(Duration::from_seconds(60.0)),
                 },
             ),
             (
                 "dt<=1 min",
                 MaskFilter {
                     operand: MaskOperand::LowerEquals,
-                    token: Token::Duration(Duration::from_seconds(60.0)),
+                    token: MaskToken::Duration(Duration::from_seconds(60.0)),
                 },
             ),
         ] {
@@ -229,21 +227,21 @@ mod test {
                 "t=2020-01-01T00:00:00 UTC",
                 MaskFilter {
                     operand: MaskOperand::Equals,
-                    token: Token::Epoch(Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap()),
+                    token: MaskToken::Epoch(Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap()),
                 },
             ),
             (
                 "t<JD 2452312.500372511 TAI",
                 MaskFilter {
                     operand: MaskOperand::LowerThan,
-                    token: Token::Epoch(Epoch::from_str("JD 2452312.500372511 TAI").unwrap()),
+                    token: MaskToken::Epoch(Epoch::from_str("JD 2452312.500372511 TAI").unwrap()),
                 },
             ),
             (
                 "t>2030-01-01T01:01:01 GPST",
                 MaskFilter {
                     operand: MaskOperand::GreaterThan,
-                    token: Token::Epoch(Epoch::from_str("2030-01-01T01:01:01 GPST").unwrap()),
+                    token: MaskToken::Epoch(Epoch::from_str("2030-01-01T01:01:01 GPST").unwrap()),
                 },
             ),
         ] {
@@ -257,7 +255,7 @@ mod test {
             "e> 30",
             MaskFilter {
                 operand: MaskOperand::GreaterThan,
-                token: Token::Elevation(30.0),
+                token: MaskToken::Elevation(30.0),
             },
         )] {
             let parsed = MaskFilter::from_str(desc).unwrap();
@@ -270,7 +268,7 @@ mod test {
             "az< 10",
             MaskFilter {
                 operand: MaskOperand::LowerThan,
-                token: Token::Azimuth(10.0),
+                token: MaskToken::Azimuth(10.0),
             },
         )] {
             let parsed = MaskFilter::from_str(desc).unwrap();
@@ -283,7 +281,7 @@ mod test {
             "o=L1,L2",
             MaskFilter {
                 operand: MaskOperand::Equals,
-                token: Token::Observables(vec!["L1".to_string(), "L2".to_string()]),
+                token: MaskToken::Observables(vec!["L1".to_string(), "L2".to_string()]),
             },
         )] {
             let parsed = MaskFilter::from_str(desc).unwrap();
@@ -296,7 +294,7 @@ mod test {
             "sta=ESBCDNK",
             MaskFilter {
                 operand: MaskOperand::Equals,
-                token: Token::Stations(vec!["ESBCDNK".to_string()]),
+                token: MaskToken::Stations(vec!["ESBCDNK".to_string()]),
             },
         )] {
             let parsed = MaskFilter::from_str(desc).unwrap();
@@ -309,7 +307,7 @@ mod test {
             "dom=10002M006",
             MaskFilter {
                 operand: MaskOperand::Equals,
-                token: Token::DOMES(vec![DOMES {
+                token: MaskToken::DOMES(vec![DOMES {
                     area: 100,
                     site: 2,
                     sequential: 6,

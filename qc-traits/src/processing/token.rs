@@ -19,7 +19,7 @@ pub enum Token {
     SNR(f64),
     /// List of Satellite Vehicles
     SV(Vec<SV>),
-    /// LIst of Satellie Vehicles by COSPAR number
+    /// List of Satellie Vehicles by COSPAR number
     COSPAR(Vec<COSPAR>),
     /// List of GNSS observables (standard RINEX codes)
     Observables(Vec<String>),

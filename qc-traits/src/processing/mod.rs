@@ -1,16 +1,18 @@
 //! RINEX / GNSS data processing in general
-use gnss_rs::prelude::{Constellation, COSPAR, DOMES, SV};
-use hifitime::{Duration, Epoch};
-
 mod token;
-use token::Token;
+pub use token::Token as MaskToken;
 
 pub mod masking;
 pub use masking::{MaskFilter, MaskOperand, Masking};
 
 pub mod resampling;
-use resampling::ResamplingOps;
-pub use resampling::{DecimationFilter, Resampling, ResamplingFilter};
+// use resampling::ResamplingOps;
+
+pub use resampling::{
+    Resampling,
+    ResamplingFilter,
+    //DecimationFilter,
+};
 
 #[derive(Debug)]
 pub enum Error {
@@ -34,8 +36,8 @@ pub enum Error {
     InvalidFrequency,
     /// Invalid Filter description
     InvalidFilter,
-    /// Invalid Token description
-    InvalidToken,
+    /// Invalid [MaskToken] description
+    InvalidMaskToken,
     /// Invalid R Decimation Filter
     InvalidDecimationRatio,
 }
@@ -85,7 +87,7 @@ mod test {
     use super::{DecimationFilter, Filter, ResamplingFilter, ResamplingOps};
     use crate::processing::MaskFilter;
     use crate::processing::MaskOperand;
-    use crate::processing::Token;
+    use crate::processing::MaskToken;
     use hifitime::Epoch;
     use std::str::FromStr;
     #[test]
