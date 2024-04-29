@@ -66,10 +66,10 @@ impl std::ops::Not for MaskOperand {
         match self {
             Self::Equals => Self::NotEquals,
             Self::NotEquals => Self::Equals,
-            Self::GreaterEquals => Self::LowerEquals,
-            Self::GreaterThan => Self::LowerThan,
-            Self::LowerThan => Self::GreaterThan,
-            Self::LowerEquals => Self::GreaterEquals,
+            Self::GreaterEquals => Self::LowerThan,
+            Self::GreaterThan => Self::LowerEquals,
+            Self::LowerThan => Self::GreaterEquals,
+            Self::LowerEquals => Self::GreaterThan,
         }
     }
 }

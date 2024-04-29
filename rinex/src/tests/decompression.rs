@@ -16,7 +16,7 @@ mod test {
         let pool = vec![
             ("zegv0010.21d", "zegv0010.21o"),
             ("AJAC3550.21D", "AJAC3550.21O"),
-            //("KOSG0010.95D", "KOSG0010.95O"), //TODO@ fix tests/obs/v2_kosg first
+            ("KOSG0010.95D", "KOSG0010.95O"),
             ("aopr0010.17d", "aopr0010.17o"),
             ("npaz3550.21d", "npaz3550.21o"),
             ("wsra0010.21d", "wsra0010.21o"),
@@ -72,7 +72,7 @@ mod test {
                     "2.11",
                     Some("MIXED"),
                     "GPS, GLO",
-                    "G08,G10,G15,G16,G18,G21,G23,G26,G32,R04,R05,R06,R10,R12,R19,R20,R21",
+                    "G01,G08,G10,G15,G16,G18,G21,G23,G26,G32,R04,R05,R06,R07,R10,R12,R19,R20,R21,R22",
                     "C1, L1, L2, P2, S1, S2",
                     Some("2021-12-21T00:00:00 GPST"),
                     Some("2021-12-21T23:59:30 GPST"),
@@ -104,7 +104,7 @@ mod test {
                     "2.10",
                     Some("GPS"),
                     "GPS",
-                    "G31, G27, G03, G32, G16, G08, G14, G23, G22, G26",
+                    "G01, G07, G08, G30, G31, G27, G03, G09, G06, G11, G14, G17, G19, G28, G32, G16, G08, G14, G23, G22, G26",
                     "C1, L1, L2, P1, P2",
                     Some("2017-01-01T00:00:00 GPST"),
                     None,

@@ -257,7 +257,7 @@ fn observation_against_model(dut: &Rinex, model: &Rinex, filename: &str, epsilon
                         filename, epoch, k_model,
                     );
                 } else {
-                    println!("{}@{:?} - {:?} is missing", filename, epoch, k_model);
+                    panic!("{}@{:?} - {:?} is missing", filename, epoch, k_model);
                 }
             }
         } else {
@@ -306,7 +306,6 @@ fn navigation_against_model(dut: &Rinex, model: &Rinex, filename: &str, _epsilon
         .expect("failed to unwrap rinex record");
     for (e_model, model_frames) in rec_model.iter() {
         if let Some(dut_frames) = rec_dut.get(e_model) {
-            println!("{:?}", dut_frames);
             for model_frame in model_frames {
                 let mut frametype = FrameClass::default();
                 if model_frame.as_eph().is_some() {

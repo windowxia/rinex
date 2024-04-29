@@ -814,8 +814,6 @@ impl Rinex {
     /// );
     /// ```
     pub fn constellation(&self) -> Box<dyn Iterator<Item = Constellation> + '_> {
-        // from .sv() (unique) iterator:
-        //  create a unique list of Constellations
         Box::new(self.sv().map(|sv| sv.constellation).unique())
     }
     /// Returns an Iterator over Unique Constellations, per Epoch
@@ -1155,67 +1153,56 @@ impl Rinex {
             Box::new([].into_iter())
         }
     }
+    /// Returns a Unique Iterator over signal Codes, like "1C" or "1P"
+    /// for precision code. Only applies to Observation RINEX,
+    /// returns nothing otherwise.
+    pub fn code(&self) -> Box<dyn Iterator<Item = String> + '_> {
+        Box::new(
+            self.observation()
+                .flat_map(|(_, v)| {
+                    v.observations
+                        .iter()
+                        .filter_map(|(k, _)| k.observable.code())
+                })
+                .unique(),
+        )
+    }
+    /// Chronological ([`Epoch`], [`EpochFlag`]) Iterator where each
+    /// flag gives more information about sampling conditions. Only applies
+    /// to Observation RINEX.
+    /// ```
+    /// use rinex::prelude::Rinex;
+    /// let rnx = Rinex::from_file("../test_resources/OBS/V3/DUTH0630.22O")
+    ///     .unwrap();
+    /// for (epoch, flag) in rnx.epoch_flag() {
+    ///     assert!(flag.is_ok()); // no invalid epoch
+    /// }
+    /// ```
+    pub fn epoch_flag(&self) -> Box<dyn Iterator<Item = (Epoch, EpochFlag)> + '_> {
+        Box::new(self.observation().map(|(k, _)| (k.epoch, k.flag)).unique())
+    }
+    /// Chronological Iterator over abnormal sampling events.
+    /// See [`EpochFlag`] for possible nature of such event.
+    pub fn epoch_anomalies(&self) -> Box<dyn Iterator<Item = (Epoch, EpochFlag)> + '_> {
+        Box::new(self.epoch_flag().filter_map(
+            |(e, f)| {
+                if !f.is_ok() {
+                    Some((e, f))
+                } else {
+                    None
+                }
+            },
+        ))
+    }
+    /// Chronological Iterator over [Epoch]s where sampling conditions are declare
+    /// "Ok" [EpochFlag::Ok] by the receiver. Only applies to Observation RINEX
+    pub fn epoch_ok(&self) -> Box<dyn Iterator<Item = Epoch> + '_> {
+        Box::new(
+            self.epoch_flag()
+                .filter_map(|(e, f)| if f.is_ok() { Some(e) } else { None }),
+        )
+    }
 }
-//    /// Returns a Unique Iterator over signal Codes, like "1C" or "1P"
-//    /// for precision code.
-//    pub fn code(&self) -> Box<dyn Iterator<Item = String> + '_> {
-//        Box::new(
-//            self.observation()
-//                .flat_map(|(_, (_, sv))| {
-//                    sv.iter().flat_map(|(_, observations)| {
-//                        observations
-//                            .keys()
-//                            .filter_map(|observable| observable.code())
-//                    })
-//                })
-//                .unique(),
-//        )
-//    }
-//    /// Returns ([`Epoch`] [`EpochFlag`]) iterator, where each {`EpochFlag`]
-//    /// validates or invalidates related [`Epoch`]
-//    /// ```
-//    /// use rinex::prelude::Rinex;
-//    /// let rnx = Rinex::from_file("../test_resources/OBS/V3/DUTH0630.22O")
-//    ///     .unwrap();
-//    /// for (epoch, flag) in rnx.epoch_flag() {
-//    ///     assert!(flag.is_ok()); // no invalid epoch
-//    /// }
-//    /// ```
-//    pub fn epoch_flag(&self) -> Box<dyn Iterator<Item = (Epoch, EpochFlag)> + '_> {
-//        Box::new(self.observation().map(|(e, _)| *e))
-//    }
-//    /// Returns an Iterator over all abnormal [`Epoch`]s
-//    /// and reports given event nature.
-//    /// Refer to [`epoch::EpochFlag`] for all possible events.
-//    /// ```
-//    /// use rinex::prelude::Rinex;
-//    /// let rnx = Rinex::from_file("../test_resources/OBS/V3/DUTH0630.22O")
-//    ///     .unwrap();
-//    /// ```
-//    pub fn epoch_anomalies(&self) -> Box<dyn Iterator<Item = (Epoch, EpochFlag)> + '_> {
-//        Box::new(self.epoch_flag().filter_map(
-//            |(e, f)| {
-//                if !f.is_ok() {
-//                    Some((e, f))
-//                } else {
-//                    None
-//                }
-//            },
-//        ))
-//    }
-//    /// Returns an iterator over all [`Epoch`]s that have
-//    /// an [`EpochFlag::Ok`] flag attached to them
-//    /// ```
-//    /// use rinex::prelude::Rinex;
-//    /// let rnx = Rinex::from_file("../test_resources/OBS/V3/DUTH0630.22O")
-//    ///     .unwrap();
-//    /// ```
-//    pub fn epoch_ok(&self) -> Box<dyn Iterator<Item = Epoch> + '_> {
-//        Box::new(
-//            self.epoch_flag()
-//                .filter_map(|(e, f)| if f.is_ok() { Some(e) } else { None }),
-//        )
-//    }
 //    /// Returns an iterator over all [`Epoch`]s where
 //    /// a Cycle Slip is declared by the receiver
 //    /// ```

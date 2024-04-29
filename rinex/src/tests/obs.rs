@@ -10,6 +10,7 @@ mod test {
             Observable, Rinex, SV,
         },
         tests::toolkit::{obsrinex_check_observables, test_observation_rinex, TestTimeFrame},
+        version::Version,
         Carrier,
     };
     use gnss_rs::sv;
@@ -53,8 +54,69 @@ mod test {
         for (k, v) in record.iter() {
             assert!(k.flag.is_ok(), "bad epoch flag @{:?}", k.epoch);
             assert!(v.clock_offset.is_none(), "bad clock offset @{:?}", k.epoch);
+            let formatted_e = format!("{:?}", k.epoch);
             for (k, obs_data) in v.observations.iter() {
-                //TODO add more tests
+                let formatted_obs = k.observable.to_string();
+                match formatted_e.as_str() {
+                    "2017-01-01T00:00:00 GPST" => match formatted_obs.as_str() {
+                        "P1" => match k.sv.constellation {
+                            Constellation::GPS => match k.sv.prn {
+                                31 => assert_eq!(obs_data.value, 22513484.772),
+                                26 => assert_eq!(obs_data.value, 21540206.156),
+                                _ => {},
+                            },
+                            _ => panic!("should not exist"),
+                        },
+                        "P2" => match k.sv.constellation {
+                            Constellation::GPS => match k.sv.prn {
+                                31 => assert_eq!(obs_data.value, 22513487.370),
+                                26 => assert_eq!(obs_data.value, 21540211.941),
+                                _ => {},
+                            },
+                            _ => panic!("should not exist"),
+                        },
+                        _ => {},
+                    },
+                    "2017-01-01T03:33:40 GPST" => match formatted_obs.as_str() {
+                        "P1" => match k.sv.constellation {
+                            Constellation::GPS => match k.sv.prn {
+                                31 => assert_eq!(obs_data.value, 24352347.924),
+                                26 => assert_eq!(obs_data.value, 21708306.570),
+                                _ => {},
+                            },
+                            _ => panic!("should not exist"),
+                        },
+                        "P2" => match k.sv.constellation {
+                            Constellation::GPS => match k.sv.prn {
+                                31 => assert_eq!(obs_data.value, 24352356.156),
+                                26 => assert_eq!(obs_data.value, 21708312.941),
+                                _ => {},
+                            },
+                            _ => panic!("should not exist"),
+                        },
+                        _ => {},
+                    },
+                    "2017-01-01T06:09:10 GPST" => match formatted_obs.as_str() {
+                        "P1" => match k.sv.constellation {
+                            Constellation::GPS => match k.sv.prn {
+                                31 => assert_eq!(obs_data.value, 20796244.823),
+                                26 => assert_eq!(obs_data.value, 21184456.914),
+                                _ => {},
+                            },
+                            _ => panic!("should not exist"),
+                        },
+                        "P2" => match k.sv.constellation {
+                            Constellation::GPS => match k.sv.prn {
+                                31 => assert_eq!(obs_data.value, 20796250.633),
+                                26 => assert_eq!(obs_data.value, 21184462.122),
+                                _ => {},
+                            },
+                            _ => panic!("should not exist"),
+                        },
+                        _ => {},
+                    },
+                    _ => panic!("should not exist"),
+                }
             }
         }
     }
@@ -474,42 +536,75 @@ R03,R04,R09,R10,R17,R18,R19,R20",
             }
         }
 
-        //for ((epoch, flag), sv, l1c) in c1 {
-        //    assert!(flag.is_ok(), "faulty epoch flag");
-        //    if epoch == Epoch::from_str("2021-12-12T00:00:30 UTC").unwrap() {
-        //        if sv == sv!("G07") {
-        //            assert_eq!(l1c, 25091572.300, "wrong C1 PR data");
-        //        } else if sv == sv!("E31") {
-        //            assert_eq!(l1c, 25340551.060, "wrong C1 PR data");
-        //        } else if sv == sv!("E33") {
-        //            assert_eq!(l1c, 27077081.020, "wrong C1 PR data");
-        //        } else if sv == sv!("S23") {
-        //            assert_eq!(l1c, 38068603.000, "wrong C1 PR data");
-        //        } else if sv == sv!("S36") {
-        //            assert_eq!(l1c, 37668418.660, "wrong C1 PR data");
-        //        }
-        //    } else if epoch == Epoch::from_str("2021-12-21T21:00:30 UTC").unwrap() {
-        //        if sv == sv!("G07") {
-        //            assert_eq!(l1c, 25093963.200, "wrong C1 PR data");
-        //        } else if sv == sv!("E31") {
-        //            assert_eq!(l1c, 27619715.620, "wrong C1 PR data");
-        //        } else if sv == sv!("E33") {
-        //            assert_eq!(l1c, 27089585.300, "wrong C1 PR data");
-        //        } else if sv == sv!("S23") {
-        //            assert_eq!(l1c, 38068585.920, "wrong C1 PR data");
-        //        } else if sv == sv!("S36") {
-        //            assert_eq!(l1c, 37668426.040, "wrong C1 PR data");
-        //        }
-        //    }
-        //}
-
         let record = rnx.record.as_obs().unwrap();
 
         for (k, v) in record.iter() {
             assert!(k.flag.is_ok(), "bad epoch flag @{:?}", k.epoch);
             assert!(v.clock_offset.is_none(), "bad clock offset @{:?}", k.epoch);
+            let formatted_e = format!("{:?}", k.epoch);
             for (k, obs_data) in v.observations.iter() {
-                // TODO add more tests
+                let formatted_obs = k.observable.to_string();
+                match formatted_e.as_str() {
+                    "2021-12-21T00:00:00 GPST" => match formatted_obs.as_str() {
+                        "D1" => match k.sv.constellation {
+                            Constellation::GPS => match k.sv.prn {
+                                7 => assert_eq!(obs_data.value, -411.138),
+                                8 => assert_eq!(obs_data.value, 2312.498),
+                                10 => assert_eq!(obs_data.value, 410.954),
+                                _ => {},
+                            },
+                            Constellation::Galileo => match k.sv.prn {
+                                31 => assert_eq!(obs_data.value, -3209.037),
+                                33 => assert_eq!(obs_data.value, -2190.415),
+                                _ => {},
+                            },
+                            Constellation::SBAS => match k.sv.prn {
+                                23 => assert_eq!(obs_data.value, 2.966),
+                                36 => assert_eq!(obs_data.value, -1.295),
+                                _ => {},
+                            },
+                            _ => {},
+                        },
+                        "D2" => match k.sv.constellation {
+                            Constellation::GPS => match k.sv.prn {
+                                7 => assert_eq!(obs_data.value, -320.373),
+                                8 => assert_eq!(obs_data.value, 1801.947),
+                                10 => assert_eq!(obs_data.value, 320.225),
+                                _ => {},
+                            },
+                            Constellation::SBAS => match k.sv.prn {
+                                36 => panic!("should not exist!"),
+                                23 => panic!("should not exist!"),
+                                _ => {},
+                            },
+                            Constellation::Galileo => match k.sv.prn {
+                                33 => panic!("should not exist!"),
+                                31 => panic!("should not exist!"),
+                                _ => {},
+                            },
+                            _ => {},
+                        },
+                        _ => {},
+                    },
+                    "2021-12-21T00:00:30 GPST" => match formatted_e.as_str() {
+                        "D2" => match k.sv.constellation {
+                            Constellation::GPS => match k.sv.prn {
+                                7 => assert_eq!(obs_data.value, -426.868),
+                                8 => assert_eq!(obs_data.value, 2305.387),
+                                10 => assert_eq!(obs_data.value, 391.975),
+                                _ => {},
+                            },
+                            Constellation::SBAS => match k.sv.prn {
+                                31 => panic!("should not exist"),
+                                33 => panic!("should not exist"),
+                                _ => {},
+                            },
+                            _ => {},
+                        },
+                        _ => {},
+                    },
+                    _ => {},
+                }
             }
         }
     }
@@ -529,7 +624,7 @@ R03,R04,R09,R10,R17,R18,R19,R20",
             "3.02",
             Some("GPS"),
             "GPS",
-            "G01, G03, G09, G17, G19, G21, G22",
+            "G01, G03, G04, G06, G09, G17, G19, G21, G22, G31",
             "C1C, L1C, D1C, S1C, S2W, L2W, D2W, S2W",
             Some("2022-03-04T00:00:00 GPST"),
             Some("2022-03-04T23:59:30 GPST"),
@@ -741,47 +836,71 @@ R03,R04,R09,R10,R17,R18,R19,R20",
         let rnx =
             Rinex::from_file("../test_resources/CRNX/V3/MOJN00DNK_R_20201770000_01D_30S_MO.crx.gz")
                 .unwrap();
-        test_observation_rinex(
-            &rnx,
-            "3.5",
-            Some("MIXED"),
-            "GPS, GLO, GAL, BDS, QZSS, IRNSS, EGNOS, SDCM, GAGAN, BDSBAS",
-            "C05, C07, C10, C12, C19, C20, C23, C32, C34, C37, E01, E03, E05, E09, E13, E15, E24, E31, G05, G07, G08, G09, G13, G15, G27, G30, I02, I04, I06, R01, R02, R08, R09, R10, R11, R17, R18, R19, S23, S25, S26, S27, S36",
-            "C2I, C6I, C7I, D2I, D6I, D7I, L2I, L6I, L7I, S2I, S6I, S7I, C1C, C5Q, C6C, C7Q, C8Q, D1C, D5Q, D6C, D7Q, D8Q, L1C, L5Q, L6C, L7Q, L8Q, S1C, S5Q, S6C, S7Q, S8Q, C1C, C1W, C2L, C2W, C5Q, D1C, D2L, D2W, D5Q, L1C, L2L, L2W, L5Q, S1C, S1W, S2L, S2W, S5Q, C5A, D5A, L5A, S5A, C1C, C2L, C5Q, D1C, D2L, D5Q, L1C, L2L, L5Q, S1C, S2L, S5Q, C1C, C1P, C2C, C2P, C3Q, D1C, D1P, D2C, D2P, D3Q, L1C, L1P, L2C, L2P, L3Q, S1C, S1P, S2C, S2P, S3Q, C1C, C5I, D1C, D5I, L1C, L5I, S1C, S5I",
-            Some("2020-06-25T00:00:00 GPST"),
-            Some("2020-06-25T23:59:30 GPST"),
-            evenly_spaced_time_frame!(
-                "2020-06-25T00:00:00 GPST",
-                "2020-06-25T23:59:30 GPST",
-                "30 s"
-            )
+
+        let header = &rnx.header;
+        let obs_header = header.obs.as_ref().unwrap();
+        assert_eq!(header.version, Version { major: 3, minor: 5 });
+        assert_eq!(header.constellation, Some(Constellation::Mixed));
+
+        let constellations = rnx.constellation().sorted().collect::<Vec<_>>();
+        assert_eq!(
+            constellations,
+            ["GPS", "GLO", "GAL", "BDS", "QZSS", "IRNSS", "EGNOS", "SDCM", "GAGAN", "BDSBAS"]
+                .iter()
+                .map(|c| Constellation::from_str(c).unwrap())
+                .sorted()
+                .collect::<Vec<_>>()
         );
-        /*
-         * Test IRNSS vehicles specificly
-         */
-        let mut irnss_sv: Vec<SV> = rnx
+
+        let sv = rnx
             .sv()
-            .filter_map(|sv| {
-                if sv.constellation == Constellation::IRNSS {
-                    Some(sv)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        irnss_sv.sort();
+            .filter(|sv| sv.constellation == Constellation::QZSS)
+            .sorted()
+            .collect::<Vec<_>>();
+        assert_eq!(
+            sv,
+            "J01, J02, J03"
+                .split(',')
+                .map(|j| SV::from_str(j.trim()).unwrap())
+                .sorted()
+                .collect::<Vec<_>>()
+        );
+
+        let sv = rnx
+            .sv()
+            .filter(|sv| sv.constellation == Constellation::IRNSS)
+            .sorted()
+            .collect::<Vec<_>>();
+        assert_eq!(
+            sv,
+            "I01, I02, I04, I05, I06, I09"
+                .split(',')
+                .map(|j| SV::from_str(j.trim()).unwrap())
+                .sorted()
+                .collect::<Vec<_>>()
+        );
+
+        let sv = rnx
+            .sv()
+            .filter(|sv| sv.constellation.is_sbas())
+            .sorted()
+            .collect::<Vec<_>>();
+        assert_eq!(
+            sv,
+            "S23, S25, S26, S27, S36, S44"
+                .split(',')
+                .map(|j| SV::from_str(j.trim()).unwrap())
+                .sorted()
+                .collect::<Vec<_>>()
+        );
 
         assert_eq!(
-            irnss_sv,
-            vec![
-                sv!("I01"),
-                sv!("I02"),
-                sv!("I04"),
-                sv!("I05"),
-                sv!("I06"),
-                sv!("I09")
-            ],
-            "IRNSS sv badly identified"
+            obs_header.time_of_first_obs,
+            Some(Epoch::from_str("2020-06-25T00:00:00 GPST").unwrap())
+        );
+        assert_eq!(
+            obs_header.time_of_last_obs,
+            Some(Epoch::from_str("2020-06-25T23:59:30 GPST").unwrap())
         );
     }
 }

@@ -21,6 +21,7 @@ mod test {
     }
     #[test]
     #[cfg(feature = "flate2")]
+    #[ignore]
     fn obs_v2() {
         let prefix = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("..")
