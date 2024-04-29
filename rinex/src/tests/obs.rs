@@ -10,6 +10,7 @@ mod test {
             Observable, Rinex, SV,
         },
         tests::toolkit::{obsrinex_check_observables, test_observation_rinex, TestTimeFrame},
+        Carrier,
     };
     use gnss_rs::sv;
     use hifitime::TimeSeries;
@@ -215,7 +216,7 @@ R03,R04,R09,R10,R17,R18,R19,R20",
             "3.02",
             Some("MIXED"),
             "GPS, GLO",
-            "G03, G01, G04, G09, G17, G19, G21, G22, G31, G32, R01, R02, R08, R09, R10, R17, R23, R24",
+            "G03, G01, G04, G09, G06, G17, G26, G19, G21, G22, G31, G32, R01, R02, R08, R09, R10, R17, R23, R24",
             "C1C, L1C, D1C, S1C, C2P, L2P, D2P, S2P, C2W, L2W, D2W, S2W",
             Some("2022-03-04T00:00:00 GPST"),
             Some("2022-03-04T23:59:30 GPST"),
@@ -310,7 +311,6 @@ R03,R04,R09,R10,R17,R18,R19,R20",
         }
     }
     #[test]
-    #[ignore]
     fn v2_kosg0010_95o() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("..")
@@ -320,17 +320,13 @@ R03,R04,R09,R10,R17,R18,R19,R20",
             .join("KOSG0010.95O");
         let fullpath = path.to_string_lossy();
         let rnx = Rinex::from_file(fullpath.as_ref()).unwrap();
-        // for (e, sv) in rnx.sv_epoch() {
-        //     println!("{:?} @ {}", sv, e);
-        // }
-        // panic!("stop");
         test_observation_rinex(
             &rnx,
             "2.0",
             Some("GPS"),
             "GPS",
-            "G01, G04, G05, G06, G16, G17, G18, G19, G20, G21, G22, G23, G24, G25, G27, G29, G31",
-            "C1, L1, L2, P2, S1",
+            "G01, G04, G05, G06, G16, G17, G18, G19, G20, G21, G22, G23, G24, G25, G27, G29, G28, G31",
+            "L1, L2, P1, P2, C1",
             Some("1995-01-01T00:00:00 GPST"),
             Some("1995-01-01T23:59:30 GPST"),
             erratic_time_frame!(
@@ -380,56 +376,103 @@ R03,R04,R09,R10,R17,R18,R19,R20",
             "parsed wrong epoch content"
         );
 
-        //let phase_l1c: Vec<_> = rnx
-        //    .carrier_phase()
-        //    .filter_map(|(e, sv, obs, value)| {
-        //        if *obs == observable!("L1C") {
-        //            Some((e, sv, value))
-        //        } else {
-        //            None
-        //        }
-        //    })
-        //    .collect();
+        let freqz = rnx.carrier().sorted().collect::<Vec<_>>();
+        assert_eq!(
+            freqz,
+            ["L1", "L2", "L5", "E1", "E5", "G1", "G2"]
+                .iter()
+                .map(|c| Carrier::from_str(c).unwrap())
+                .sorted()
+                .collect::<Vec<_>>(),
+        );
 
-        //for ((epoch, flag), sv, l1c) in phase_l1c {
-        //    assert!(flag.is_ok(), "faulty epoch flag");
-        //    if epoch == Epoch::from_str("2021-12-12T00:00:30 UTC").unwrap() {
-        //        if sv == sv!("G07") {
-        //            assert_eq!(l1c, 131869667.223, "wrong L1C phase data");
-        //        } else if sv == sv!("E31") {
-        //            assert_eq!(l1c, 108313833.964, "wrong L1C phase data");
-        //        } else if sv == sv!("E33") {
-        //            assert_eq!(l1c, 106256338.827, "wrong L1C phase data");
-        //        } else if sv == sv!("S23") {
-        //            assert_eq!(l1c, 200051837.090, "wrong L1C phase data");
-        //        } else if sv == sv!("S36") {
-        //            assert_eq!(l1c, 197948874.430, "wrong L1C phase data");
-        //        }
-        //    } else if epoch == Epoch::from_str("2021-12-21T21:00:30 UTC").unwrap() {
-        //        if sv == sv!("G07") {
-        //            assert_eq!(l1c, 131869667.223, "wrong L1C phase data");
-        //        } else if sv == sv!("E31") {
-        //            assert_eq!(l1c, 108385729.352, "wrong L1C phase data");
-        //        } else if sv == sv!("E33") {
-        //            assert_eq!(l1c, 106305408.320, "wrong L1C phase data");
-        //        } else if sv == sv!("S23") {
-        //            assert_eq!(l1c, 200051746.696, "wrong L1C phase data");
-        //        } else if sv == sv!("S36") {
-        //            assert_eq!(l1c, 197948914.912, "wrong L1C phase data");
-        //        }
-        //    }
-        //}
+        let phase_l1c: Vec<_> = rnx
+            .carrier_phase()
+            .filter_map(|(e, f, sv, obs, value)| {
+                if *obs == observable!("L1") {
+                    Some((e, f, sv, value))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
-        //let c1: Vec<_> = rnx
-        //    .pseudo_range()
-        //    .filter_map(|(e, sv, obs, value)| {
-        //        if *obs == observable!("C1") {
-        //            Some((e, sv, value))
-        //        } else {
-        //            None
-        //        }
-        //    })
-        //    .collect();
+        assert!(phase_l1c.len() > 0, "failed to form l1 phase iterator");
+
+        for (t, flag, sv, value) in phase_l1c {
+            assert!(flag.is_ok(), "bad L1 flag");
+            let formatted = format!("{:?}", t);
+            match formatted.as_str() {
+                "2021-12-21T00:00:00 GPST" => match sv.constellation {
+                    Constellation::GPS => match sv.prn {
+                        7 => assert_eq!(value, 131857102.133),
+                        8 => assert_eq!(value, 114374313.914),
+                        10 => assert_eq!(value, 110158976.908),
+                        16 => assert_eq!(value, 112191307.034),
+                        _ => {},
+                    },
+                    _ => {},
+                },
+                "2021-12-21T00:00:30 GPST" => match sv.constellation {
+                    Constellation::GPS => match sv.prn {
+                        7 => assert_eq!(value, 131869667.223),
+                        _ => {},
+                    },
+                    Constellation::Galileo => match sv.prn {
+                        31 => assert_eq!(value, 145142607.255),
+                        33 => assert_eq!(value, 142356780.263),
+                        _ => {},
+                    },
+                    Constellation::SBAS => match sv.prn {
+                        23 => assert_eq!(value, 200051837.090),
+                        36 => assert_eq!(value, 197948874.430),
+                        _ => {},
+                    },
+                    _ => {},
+                },
+                _ => {},
+            }
+        }
+
+        let pr_c1: Vec<_> = rnx
+            .pseudo_range()
+            .filter_map(|(e, f, sv, obs, value)| {
+                if *obs == observable!("C1") {
+                    Some((e, f, sv, value))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        assert!(pr_c1.len() > 0, "failed to form c1 pr iterator");
+        for (t, flag, sv, value) in pr_c1 {
+            assert!(flag.is_ok(), "bad L1 flag");
+            let formatted = format!("{:?}", t);
+            match formatted.as_str() {
+                "2021-12-21T00:00:00 GPST" => match sv.constellation {
+                    Constellation::GPS => match sv.prn {
+                        7 => assert_eq!(value, 25091572.300),
+                        8 => assert_eq!(value, 21764705.880),
+                        10 => assert_eq!(value, 20962551.380),
+                        16 => assert_eq!(value, 21349295.460),
+                        _ => {},
+                    },
+                    _ => {},
+                },
+                "2021-12-21T00:00:30 GPST" => match sv.constellation {
+                    Constellation::GPS => match sv.prn {
+                        7 => assert_eq!(value, 25093963.200),
+                        8 => assert_eq!(value, 21751524.200),
+                        10 => assert_eq!(value, 20960258.720),
+                        16 => assert_eq!(value, 21362073.640),
+                        _ => {},
+                    },
+                    _ => {},
+                },
+                _ => {},
+            }
+        }
 
         //for ((epoch, flag), sv, l1c) in c1 {
         //    assert!(flag.is_ok(), "faulty epoch flag");

@@ -1033,32 +1033,129 @@ impl Rinex {
  * OBS RINEX specific methods: only available on crate feature.
  * Either specific Iterators, or meaningful data we can extract.
  */
-//#[cfg(feature = "obs")]
-//#[cfg_attr(docrs, doc(cfg(feature = "obs")))]
-//impl Rinex {
-//    /// Returns a Unique Iterator over identified [`Carrier`]s
-//    pub fn carrier(&self) -> Box<dyn Iterator<Item = Carrier> + '_> {
-//        Box::new(self.observation().flat_map(|(_, (_, sv))| {
-//            sv.iter().flat_map(|(sv, observations)| {
-//                observations
-//                    .keys()
-//                    .filter_map(|observable| {
-//                        if let Ok(carrier) = observable.carrier(sv.constellation) {
-//                            Some(carrier)
-//                        } else {
-//                            None
-//                        }
-//                    })
-//                    .fold(vec![], |mut list, item| {
-//                        if !list.contains(&item) {
-//                            list.push(item);
-//                        }
-//                        list
-//                    })
-//                    .into_iter()
-//            })
-//        }))
-//    }
+#[cfg(feature = "obs")]
+#[cfg_attr(docrs, doc(cfg(feature = "obs")))]
+impl Rinex {
+    /// Returns a Unique Iterator over identified [`Carrier`]s.
+    /// Only applies to Observation and DORIS RINEX, returns null Iterator
+    /// in other cases.
+    pub fn carrier(&self) -> Box<dyn Iterator<Item = Carrier> + '_> {
+        if let Some(rec) = self.record.as_obs() {
+            Box::new(
+                rec.iter()
+                    .flat_map(|(_, k)| {
+                        k.observations.iter().flat_map(|(k, v)| {
+                            if let Ok(carrier) = k.observable.carrier(k.sv.constellation) {
+                                Some(carrier)
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .unique(),
+            )
+        } else {
+            Box::new([].into_iter())
+        }
+    }
+    /// Returns an iterator over phase data, expressed in (whole) carrier cycles.
+    /// If Self is High Precision (internal scaling) RINEX, phase data points
+    /// are automatically scaled correctly. This allows up to 100 pico carrier cycle
+    /// precision. This only applies to Observation and will return nothing in other cases.
+    /// ```
+    /// use rinex::prelude::*;
+    /// use rinex::observable;
+    /// use std::str::FromStr;
+    ///
+    /// let rnx = Rinex::from_file("../test_resources/OBS/V2/AJAC3550.21O")
+    ///     .unwrap();
+    /// // example: design a L1 signal iterator
+    /// let phase_l1 = rnx.carrier_phase()
+    ///     .filter_map(|(e, sv, obs, value)| {
+    ///         if *obs == observable!("L1") {
+    ///             Some((e, sv, value))
+    ///         } else {
+    ///             None
+    ///         }
+    ///     });
+    /// ```
+    pub fn carrier_phase(
+        &self,
+    ) -> Box<dyn Iterator<Item = (Epoch, EpochFlag, SV, &Observable, f64)> + '_> {
+        if let Some(rec) = self.record.as_obs() {
+            Box::new(rec.iter().flat_map(|(key, rec_v)| {
+                rec_v.observations.iter().filter_map(|(k, obs_data)| {
+                    if k.observable.is_phase_observable() {
+                        if let Some(header) = &self.header.obs {
+                            // apply scaling, if need be
+                            if let Some(scaling) =
+                                header.scaling(k.sv.constellation, k.observable.clone())
+                            {
+                                Some((
+                                    key.epoch,
+                                    key.flag,
+                                    k.sv,
+                                    &k.observable,
+                                    obs_data.value / *scaling as f64,
+                                ))
+                            } else {
+                                Some((key.epoch, key.flag, k.sv, &k.observable, obs_data.value))
+                            }
+                        } else {
+                            Some((key.epoch, key.flag, k.sv, &k.observable, obs_data.value))
+                        }
+                    } else {
+                        None
+                    }
+                })
+            }))
+        } else {
+            Box::new([].into_iter())
+        }
+    }
+    /// Returns Iterator over pseudo range observations.
+    /// This only applies to Observation RINEX and will return null in other cases.
+    /// ```
+    /// use rinex::prelude::*;
+    /// use rinex::observable;
+    /// use std::str::FromStr;
+    ///
+    /// let rnx = Rinex::from_file("../test_resources/OBS/V2/AJAC3550.21O")
+    ///     .unwrap();
+    /// // example: design a C1 pseudo range iterator
+    /// let c1 = rnx.pseudo_range()
+    ///     .filter_map(|(e, sv, obs, value)| {
+    ///         if *obs == observable!("C1") {
+    ///             Some((e, sv, value))
+    ///         } else {
+    ///             None
+    ///         }
+    ///     });
+    /// ```
+    pub fn pseudo_range(
+        &self,
+    ) -> Box<dyn Iterator<Item = (Epoch, EpochFlag, SV, &Observable, f64)> + '_> {
+        if let Some(rec) = self.record.as_obs() {
+            Box::new(rec.iter().flat_map(|(key, rec_v)| {
+                rec_v.observations.iter().filter_map(|(k, obs_data)| {
+                    if k.observable.is_pseudorange_observable() {
+                        Some((
+                            key.epoch,
+                            key.flag,
+                            k.sv,
+                            &k.observable,
+                            obs_data.value as f64,
+                        ))
+                    } else {
+                        None
+                    }
+                })
+            }))
+        } else {
+            Box::new([].into_iter())
+        }
+    }
+}
 //    /// Returns a Unique Iterator over signal Codes, like "1C" or "1P"
 //    /// for precision code.
 //    pub fn code(&self) -> Box<dyn Iterator<Item = String> + '_> {
@@ -1153,71 +1250,6 @@ impl Rinex {
 //                .filter_map(|(e, (clk, _))| clk.as_ref().map(|clk| (*e, *clk))),
 //        )
 //    }
-//    /// Returns an iterator over phase data, expressed in (whole) carrier cycles.
-//    /// If Self is a High Precision RINEX (scaled RINEX), data is correctly scaled.
-//    /// High precision RINEX allows up to 100 pico carrier cycle precision.
-//    /// ```
-//    /// use rinex::prelude::*;
-//    /// use rinex::observable;
-//    /// use std::str::FromStr;
-//    ///
-//    /// let rnx = Rinex::from_file("../test_resources/OBS/V2/AJAC3550.21O")
-//    ///     .unwrap();
-//    /// // example: design a L1 signal iterator
-//    /// let phase_l1c = rnx.carrier_phase()
-//    ///     .filter_map(|(e, sv, obs, value)| {
-//    ///         if *obs == observable!("L1C") {
-//    ///             Some((e, sv, value))
-//    ///         } else {
-//    ///             None
-//    ///         }
-//    ///     });
-//    /// ```
-//    pub fn carrier_phase(
-//        &self,
-//    ) -> Box<dyn Iterator<Item = ((Epoch, EpochFlag), SV, &Observable, f64)> + '_> {
-//        Box::new(self.observation().flat_map(|(e, (_, vehicles))| {
-//            vehicles.iter().flat_map(|(sv, observations)| {
-//                observations.iter().filter_map(|(observable, obsdata)| {
-//                    if observable.is_phase_observable() {
-//                        if let Some(header) = &self.header.obs {
-//                            // apply a scaling, if any, otherwise : leave data untouched
-//                            // to preserve its precision
-//                            if let Some(scaling) =
-//                                header.scaling(sv.constellation, observable.clone())
-//                            {
-//                                Some((*e, *sv, observable, obsdata.obs / *scaling as f64))
-//                            } else {
-//                                Some((*e, *sv, observable, obsdata.obs))
-//                            }
-//                        } else {
-//                            Some((*e, *sv, observable, obsdata.obs))
-//                        }
-//                    } else {
-//                        None
-//                    }
-//                })
-//            })
-//        }))
-//    }
-//    /// Returns an iterator over pseudo range observations.
-//    /// ```
-//    /// use rinex::prelude::*;
-//    /// use rinex::observable;
-//    /// use std::str::FromStr;
-//    ///
-//    /// let rnx = Rinex::from_file("../test_resources/OBS/V2/AJAC3550.21O")
-//    ///     .unwrap();
-//    /// // example: design a C1 pseudo range iterator
-//    /// let c1 = rnx.pseudo_range()
-//    ///     .filter_map(|(e, sv, obs, value)| {
-//    ///         if *obs == observable!("C1") {
-//    ///             Some((e, sv, value))
-//    ///         } else {
-//    ///             None
-//    ///         }
-//    ///     });
-//    /// ```
 //    pub fn pseudo_range(
 //        &self,
 //    ) -> Box<dyn Iterator<Item = ((Epoch, EpochFlag), SV, &Observable, f64)> + '_> {
