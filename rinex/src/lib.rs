@@ -96,6 +96,9 @@ pub mod prelude {
     pub use gnss::prelude::{Constellation, DomesTrackingPoint, COSPAR, DOMES, SV};
     // hifitime re-export
     pub use hifitime::{Duration, Epoch, TimeScale, TimeSeries};
+    // processing re-export
+    #[cfg(feature = "qc")]
+    pub use rinex_qc_traits::{Filter, MaskFilter, MaskOperand, MaskToken, Masking, Preprocessing};
 }
 
 /// Package dedicated to file production.

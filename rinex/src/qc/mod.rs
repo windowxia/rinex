@@ -1,11 +1,11 @@
 /* Features that only get activated on "qc" option */
 use crate::prelude::Rinex;
-use rinex_qc_traits::{MaskFilter, Masking};
 use hifitime::TimeSeries;
+use rinex_qc_traits::{MaskFilter, Masking};
 
 use crate::{
     epoch::epoch_decompose,
-    prelude::{Constellation, RinexType, Duration, Epoch},
+    prelude::{Constellation, Duration, Epoch, RinexType},
 };
 
 // RINEX production infrastructure // physical observations
