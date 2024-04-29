@@ -2,18 +2,11 @@
 use crate::prelude::Rinex;
 use rinex_qc_traits::{MaskFilter, Masking};
 
-use crate::{
-    epoch::epoch_decompose,
-};
+use crate::epoch::epoch_decompose;
 
 // RINEX production infrastructure // physical observations
-mod production; 
-pub use production::{
-    DataSource,
-    DetailedProductionAttributes,
-    ProductionAttributes,
-    FFU, PPU,
-};
+mod production;
+pub use production::{DataSource, DetailedProductionAttributes, ProductionAttributes, FFU, PPU};
 
 #[cfg_attr(docrs, doc(cfg(feature = "qc")))]
 impl Rinex {
@@ -92,7 +85,7 @@ impl Rinex {
         )
     }
     /// Returns dominant sample rate, ie., most common [Duration] between successive
-    /// [Epoch], discarding minor data gaps that may occur.
+    /// [Epoch]s, discarding minor data gaps that may have occurred.
     /// ```
     /// use rinex::prelude::*;
     /// let rnx = Rinex::from_file("../test_resources/MET/V2/abvi0010.15m")
@@ -509,7 +502,7 @@ impl Rinex {
     pub fn steady_sampling(&self) -> bool {
         self.sampling_histogram().count() == 1
     }
-    /// Forms a [`TimeSeries`] iterator spanning [Self::duration] 
+    /// Forms a [`TimeSeries`] iterator spanning [Self::duration]
     /// and dt=[Self::dominant_sample_rate].
     pub fn timeseries(&self) -> Option<TimeSeries> {
         let start = self.first_epoch()?;

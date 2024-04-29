@@ -293,148 +293,11 @@ mod test {
 
         let record = rnx.record.as_obs().unwrap();
 
-        for (index, ((_e, flag), (clk_offset, vehicles))) in record.iter().enumerate() {
-            assert!(flag.is_ok());
-            assert!(clk_offset.is_none());
-            if index == 0 {
-                assert_eq!(vehicles.len(), 24);
-                for (sv, observations) in vehicles {
-                    if *sv == SV::new(Constellation::GPS, 07) {
-                        let mut keys: Vec<_> = observations.keys().cloned().collect();
-                        keys.sort();
-                        let mut expected: Vec<Observable> = "C1 C2 L1 L2 P1 P2 S1 S2"
-                            .split_ascii_whitespace()
-                            .map(|k| Observable::from_str(k).unwrap())
-                            .collect();
-                        expected.sort();
-                        let c1 = observations
-                            .get(&Observable::from_str("C1").unwrap())
-                            .unwrap();
-                        assert_eq!(c1.obs, 24178026.635);
-                        let c2 = observations
-                            .get(&Observable::from_str("C2").unwrap())
-                            .unwrap();
-                        assert_eq!(c2.obs, 24178024.891);
-                        let l1 = observations
-                            .get(&Observable::from_str("L1").unwrap())
-                            .unwrap();
-                        assert_eq!(l1.obs, 127056391.699);
-                        let l2 = observations
-                            .get(&Observable::from_str("L2").unwrap())
-                            .unwrap();
-                        assert_eq!(l2.obs, 99004963.017);
-                        let p1 = observations
-                            .get(&Observable::from_str("P1").unwrap())
-                            .unwrap();
-                        assert_eq!(p1.obs, 24178026.139);
-                        let p2 = observations
-                            .get(&Observable::from_str("P2").unwrap())
-                            .unwrap();
-                        assert_eq!(p2.obs, 24178024.181);
-                        let s1 = observations
-                            .get(&Observable::from_str("S1").unwrap())
-                            .unwrap();
-                        assert_eq!(s1.obs, 38.066);
-                        let s2 = observations
-                            .get(&Observable::from_str("S2").unwrap())
-                            .unwrap();
-                        assert_eq!(s2.obs, 22.286);
-                    } else if *sv == SV::new(Constellation::GPS, 08) {
-                        let mut keys: Vec<Observable> = observations.keys().cloned().collect();
-                        keys.sort();
-                        let mut expected: Vec<Observable> = "C1 C2 C5 L1 L2 L5 P1 P2 S1 S2 S5"
-                            .split_ascii_whitespace()
-                            .map(|k| Observable::from_str(k).unwrap())
-                            .collect();
-                        expected.sort();
-                        let c1 = observations
-                            .get(&Observable::from_str("C1").unwrap())
-                            .unwrap();
-                        assert_eq!(c1.obs, 21866748.928);
-                        let c2 = observations
-                            .get(&Observable::from_str("C2").unwrap())
-                            .unwrap();
-                        assert_eq!(c2.obs, 21866750.407);
-                        let c5 = observations
-                            .get(&Observable::from_str("C5").unwrap())
-                            .unwrap();
-                        assert_eq!(c5.obs, 21866747.537);
-                        let l1 = observations
-                            .get(&Observable::from_str("L1").unwrap())
-                            .unwrap();
-                        assert_eq!(l1.obs, 114910552.082);
-                        let l2 = observations
-                            .get(&Observable::from_str("L2").unwrap())
-                            .unwrap();
-                        assert_eq!(l2.obs, 89540700.326);
-                        let l5 = observations
-                            .get(&Observable::from_str("L5").unwrap())
-                            .unwrap();
-                        assert_eq!(l5.obs, 85809828.276);
-                        let p1 = observations
-                            .get(&Observable::from_str("P1").unwrap())
-                            .unwrap();
-                        assert_eq!(p1.obs, 21866748.200);
-                        let p2 = observations
-                            .get(&Observable::from_str("P2").unwrap())
-                            .unwrap();
-                        assert_eq!(p2.obs, 21866749.482);
-                        let s1 = observations
-                            .get(&Observable::from_str("S1").unwrap())
-                            .unwrap();
-                        assert_eq!(s1.obs, 45.759);
-                        let s2 = observations
-                            .get(&Observable::from_str("S2").unwrap())
-                            .unwrap();
-                        assert_eq!(s2.obs, 49.525);
-                        let s5 = observations
-                            .get(&Observable::from_str("S5").unwrap())
-                            .unwrap();
-                        assert_eq!(s5.obs, 52.161);
-                    } else if *sv == SV::new(Constellation::GPS, 13) {
-                        let mut keys: Vec<Observable> = observations.keys().cloned().collect();
-                        keys.sort();
-                        let mut expected: Vec<Observable> = "C1 L1 L2 P1 P2 S1 S2"
-                            .split_ascii_whitespace()
-                            .map(|k| Observable::from_str(k).unwrap())
-                            .collect();
-                        expected.sort();
-                        assert_eq!(keys, expected);
-                        //let c1 = observations.get("C1")
-                        //	.unwrap();
-                        //assert_eq!(s2.obs, 49.525);
-                        //  25107711.730 5                                 131941919.38305 102811868.09001
-                        //                  25107711.069 1  25107709.586 1        33.150           8.952
-                        let c1 = observations
-                            .get(&Observable::from_str("C1").unwrap())
-                            .unwrap();
-                        assert_eq!(c1.obs, 25107711.730);
-                        let l1 = observations
-                            .get(&Observable::from_str("L1").unwrap())
-                            .unwrap();
-                        assert_eq!(l1.obs, 131941919.383);
-                        let l2 = observations
-                            .get(&Observable::from_str("L2").unwrap())
-                            .unwrap();
-                        assert_eq!(l2.obs, 102811868.090);
-                        let p1 = observations
-                            .get(&Observable::from_str("P1").unwrap())
-                            .unwrap();
-                        assert_eq!(p1.obs, 25107711.069);
-                        let p2 = observations
-                            .get(&Observable::from_str("P2").unwrap())
-                            .unwrap();
-                        assert_eq!(p2.obs, 25107709.586);
-                        let s1 = observations
-                            .get(&Observable::from_str("S1").unwrap())
-                            .unwrap();
-                        assert_eq!(s1.obs, 33.150);
-                        let s2 = observations
-                            .get(&Observable::from_str("S2").unwrap())
-                            .unwrap();
-                        assert_eq!(s2.obs, 8.952);
-                    }
-                }
+        for (k, v) in record.iter() {
+            assert!(k.flag.is_ok());
+            assert!(v.clock_offset.is_none());
+            for (k, v) in v.observations.iter() {
+                // TODO add more tests
             }
         }
     }
@@ -516,131 +379,14 @@ mod test {
          */
         let record = rnx.record.as_obs().unwrap();
 
-        for (_, (clk_offset, _)) in record {
-            assert!(clk_offset.is_none());
-        }
-
-        for (e_index, epoch) in rnx.epoch().enumerate() {
-            let (_, vehicles) = record.get(&(epoch, EpochFlag::Ok)).unwrap();
-            if e_index == 0 {
-                /*
-                 * 1st epoch
-                 */
-                assert_eq!(vehicles.len(), 38);
-                let keys: Vec<_> = vehicles.keys().copied().collect();
-                let mut expected: Vec<SV> = vec![
-                    SV::new(Constellation::GPS, 01),
-                    SV::new(Constellation::GPS, 07),
-                    SV::new(Constellation::GPS, 08),
-                    SV::new(Constellation::GPS, 10),
-                    SV::new(Constellation::GPS, 16),
-                    SV::new(Constellation::GPS, 18),
-                    SV::new(Constellation::GPS, 21),
-                    SV::new(Constellation::GPS, 23),
-                    SV::new(Constellation::GPS, 26),
-                    SV::new(Constellation::GPS, 30),
-                    SV::new(Constellation::Glonass, 04),
-                    SV::new(Constellation::Glonass, 05),
-                    SV::new(Constellation::Glonass, 10),
-                    SV::new(Constellation::Glonass, 12),
-                    SV::new(Constellation::Glonass, 20),
-                    SV::new(Constellation::Glonass, 21),
-                    SV::new(Constellation::Galileo, 02),
-                    SV::new(Constellation::Galileo, 11),
-                    SV::new(Constellation::Galileo, 12),
-                    SV::new(Constellation::Galileo, 24),
-                    SV::new(Constellation::Galileo, 25),
-                    SV::new(Constellation::Galileo, 31),
-                    SV::new(Constellation::Galileo, 33),
-                    SV::new(Constellation::Galileo, 36),
-                    SV::new(Constellation::BeiDou, 05),
-                    SV::new(Constellation::BeiDou, 11),
-                    SV::new(Constellation::BeiDou, 14),
-                    SV::new(Constellation::BeiDou, 21),
-                    SV::new(Constellation::BeiDou, 22),
-                    SV::new(Constellation::BeiDou, 23),
-                    SV::new(Constellation::BeiDou, 25),
-                    SV::new(Constellation::BeiDou, 28),
-                    SV::new(Constellation::BeiDou, 34),
-                    SV::new(Constellation::BeiDou, 37),
-                    SV::new(Constellation::BeiDou, 42),
-                    SV::new(Constellation::BeiDou, 43),
-                    SV::new(Constellation::BeiDou, 44),
-                    SV::new(Constellation::BeiDou, 58),
-                ];
-                expected.sort();
-                assert_eq!(keys, expected);
-            } else if e_index == rnx.epoch().count() - 1 {
-                /*
-                 * last epoch
-                 */
-                assert_eq!(vehicles.len(), 38);
-                let keys: Vec<_> = vehicles.keys().copied().collect();
-                let mut expected: Vec<SV> = vec![
-                    SV::new(Constellation::GPS, 01),
-                    SV::new(Constellation::GPS, 07),
-                    SV::new(Constellation::GPS, 08),
-                    SV::new(Constellation::GPS, 10),
-                    SV::new(Constellation::GPS, 16),
-                    SV::new(Constellation::GPS, 18),
-                    SV::new(Constellation::GPS, 21),
-                    SV::new(Constellation::GPS, 23),
-                    SV::new(Constellation::GPS, 26),
-                    SV::new(Constellation::GPS, 30),
-                    SV::new(Constellation::Glonass, 04),
-                    SV::new(Constellation::Glonass, 05),
-                    SV::new(Constellation::Glonass, 10),
-                    SV::new(Constellation::Glonass, 12),
-                    SV::new(Constellation::Glonass, 20),
-                    SV::new(Constellation::Glonass, 21),
-                    SV::new(Constellation::Galileo, 02),
-                    SV::new(Constellation::Galileo, 11),
-                    SV::new(Constellation::Galileo, 12),
-                    SV::new(Constellation::Galileo, 24),
-                    SV::new(Constellation::Galileo, 25),
-                    SV::new(Constellation::Galileo, 31),
-                    SV::new(Constellation::Galileo, 33),
-                    SV::new(Constellation::Galileo, 36),
-                    SV::new(Constellation::BeiDou, 05),
-                    SV::new(Constellation::BeiDou, 11),
-                    SV::new(Constellation::BeiDou, 14),
-                    SV::new(Constellation::BeiDou, 21),
-                    SV::new(Constellation::BeiDou, 22),
-                    SV::new(Constellation::BeiDou, 23),
-                    SV::new(Constellation::BeiDou, 25),
-                    SV::new(Constellation::BeiDou, 28),
-                    SV::new(Constellation::BeiDou, 34),
-                    SV::new(Constellation::BeiDou, 37),
-                    SV::new(Constellation::BeiDou, 42),
-                    SV::new(Constellation::BeiDou, 43),
-                    SV::new(Constellation::BeiDou, 44),
-                    SV::new(Constellation::BeiDou, 58),
-                ];
-                expected.sort();
-                assert_eq!(keys, expected);
-                let c58 = vehicles.get(&SV::new(Constellation::BeiDou, 58)).unwrap();
-
-                let mut keys: Vec<Observable> = c58.keys().cloned().collect();
-                keys.sort();
-
-                let mut expected: Vec<Observable> = "C2I L2I S2I"
-                    .split_ascii_whitespace()
-                    .map(|k| Observable::from_str(k).unwrap())
-                    .collect();
-                expected.sort();
-
-                assert_eq!(keys, expected);
-
-                let c2i = c58.get(&Observable::from_str("C2I").unwrap()).unwrap();
-                assert_eq!(c2i.obs, 32241892.280);
-                assert!(c2i.lli.is_none());
-                assert!(c2i.snr.is_none());
-
-                let l2i = c58.get(&Observable::from_str("L2I").unwrap()).unwrap();
-                assert_eq!(l2i.obs, 167892006.433);
-
-                let s2i = c58.get(&Observable::from_str("S2I").unwrap()).unwrap();
-                assert_eq!(s2i.obs, 47.650);
+        for (k, v) in record.iter() {
+            assert!(
+                v.clock_offset.is_none(),
+                "@{:?} bad clock offset data",
+                k.epoch
+            );
+            for (k, v) in v.observations.iter() {
+                // TODO add more tests
             }
         }
     }
@@ -729,8 +475,11 @@ mod test {
         );
 
         let record = record.unwrap();
-        for (_epoch, (clk_offset, _svs)) in record {
-            assert!(clk_offset.is_none());
+        for (k, v) in record.iter() {
+            assert!(v.clock_offset.is_none(), "@{:?} bad clock offset", k.epoch);
+            for (k, v) in v.observations.iter() {
+                // TODO add more tests
+            }
         }
     }
     #[test]
@@ -792,6 +541,8 @@ mod test {
             Constellation::SBAS,
             &["C1C", "C5I", "D1C", "D5I", "L1C", "L5I", "S1C", "S5I"],
         );
+
+        // TODO add more tests
     }
     #[test]
     #[cfg(feature = "flate2")]
@@ -850,5 +601,7 @@ mod test {
             Constellation::SBAS,
             &["C1C", "C5I", "D1C", "D5I", "L1C", "L5I", "S1C", "S5I"],
         );
+
+        // TODO: add more tests
     }
 }

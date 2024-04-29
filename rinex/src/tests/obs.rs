@@ -2,14 +2,17 @@
 mod test {
     use crate::{
         erratic_time_frame, evenly_spaced_time_frame,
-        observable,
         marker::MarkerType,
+        observable,
         observation::SNR,
-        prelude::{Epoch, EpochFlag, GroundPosition, Duration, SV, Rinex, Constellation, Header, Observable, LliFlags},
+        prelude::{
+            Constellation, Duration, Epoch, EpochFlag, GroundPosition, Header, LliFlags,
+            Observable, Rinex, SV,
+        },
         tests::toolkit::{obsrinex_check_observables, test_observation_rinex, TestTimeFrame},
     };
-    use hifitime::TimeSeries;
     use gnss_rs::sv;
+    use hifitime::TimeSeries;
     use itertools::Itertools;
     use std::path::Path;
     use std::str::FromStr;
@@ -49,7 +52,7 @@ mod test {
         for (k, v) in record.iter() {
             assert!(k.flag.is_ok(), "bad epoch flag @{:?}", k.epoch);
             assert!(v.clock_offset.is_none(), "bad clock offset @{:?}", k.epoch);
-            for (k, obs_data) in v.observations {
+            for (k, obs_data) in v.observations.iter() {
                 //TODO add more tests
             }
         }
@@ -99,11 +102,10 @@ mod test {
         for (k, v) in record.iter() {
             assert!(k.flag.is_ok(), "bad epoch flag @{:?}", k.epoch);
             assert!(v.clock_offset.is_none(), "bad clock offset @{:?}", k.epoch);
-            for (k, obs_data) in v.observations {
+            for (k, obs_data) in v.observations.iter() {
                 //TODO add more tests
             }
         }
-
     }
     #[test]
     fn v2_rovn0010_21o() {
@@ -171,7 +173,7 @@ mod test {
         for (k, v) in record.iter() {
             assert!(k.flag.is_ok(), "bad epoch flag @{:?}", k.epoch);
             assert!(v.clock_offset.is_none(), "bad clock offset @{:?}", k.epoch);
-            for (k, obs_data) in v.observations {
+            for (k, obs_data) in v.observations.iter() {
                 //TODO add more tests
             }
         }
@@ -219,7 +221,7 @@ mod test {
         for (k, v) in record.iter() {
             assert!(k.flag.is_ok(), "bad epoch flag @{:?}", k.epoch);
             assert!(v.clock_offset.is_none(), "bad clock offset @{:?}", k.epoch);
-            for (k, obs_data) in v.observations {
+            for (k, obs_data) in v.observations.iter() {
                 //TODO add more tests
             }
         }
@@ -283,7 +285,7 @@ mod test {
         for (k, v) in record.iter() {
             assert!(k.flag.is_ok(), "bad epoch flag @{:?}", k.epoch);
             assert!(v.clock_offset.is_none(), "bad clock offset @{:?}", k.epoch);
-            for (k, obs_data) in v.observations {
+            for (k, obs_data) in v.observations.iter() {
                 // TODO add more tests
             }
         }
@@ -354,7 +356,8 @@ mod test {
         }
 
         assert_eq!(
-            rnx.epoch().collect::<Vec<Epoch>>(), epochs,
+            rnx.epoch().collect::<Vec<Epoch>>(),
+            epochs,
             "parsed wrong epoch content"
         );
 
@@ -443,7 +446,7 @@ mod test {
         for (k, v) in record.iter() {
             assert!(k.flag.is_ok(), "bad epoch flag @{:?}", k.epoch);
             assert!(v.clock_offset.is_none(), "bad clock offset @{:?}", k.epoch);
-            for (k, obs_data) in v.observations {
+            for (k, obs_data) in v.observations.iter() {
                 // TODO add more tests
             }
         }
@@ -484,7 +487,8 @@ mod test {
             Epoch::from_str("2022-03-04T00:52:30 GPST").unwrap(),
         ];
         assert_eq!(
-            rnx.epoch().collect::<Vec<Epoch>>(), expected,
+            rnx.epoch().collect::<Vec<Epoch>>(),
+            expected,
             "parsed wrong epoch content"
         );
 
@@ -492,7 +496,7 @@ mod test {
         for (k, v) in record.iter() {
             assert!(k.flag.is_ok(), "bad epoch flag @{:?}", k.epoch);
             assert!(v.clock_offset.is_none(), "bad clock offset @{:?}", k.epoch);
-            for (k, obs_data) in v.observations {
+            for (k, obs_data) in v.observations.iter() {
                 // TODO: add more tests
             }
         }
@@ -660,13 +664,12 @@ mod test {
             values
         );
 
-
         let record = rnx.record.as_obs().unwrap();
         for (k, v) in record.iter() {
             assert!(k.flag.is_ok(), "bad epoch flag @{:?}", k.epoch);
             assert!(v.clock_offset.is_none(), "bad clock offset @{:?}", k.epoch);
-            for (k, obs_data) in v.observations {
-                // TODO add more tests 
+            for (k, obs_data) in v.observations.iter() {
+                // TODO add more tests
             }
         }
     }

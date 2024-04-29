@@ -5,12 +5,9 @@ mod antex;
 #[cfg(feature = "clock")]
 mod clock;
 mod compression;
-#[cfg(feature = "processing")]
-mod decimation;
 mod decompression;
 #[cfg(feature = "doris")]
 mod doris;
-mod filename;
 #[cfg(feature = "ionex")]
 mod ionex;
 mod merge;

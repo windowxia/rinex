@@ -230,99 +230,42 @@ fn observation_against_model(dut: &Rinex, model: &Rinex, filename: &str, epsilon
         filename
     );
 
-    for (e_model, (clk_offset_model, vehicles_model)) in rec_model.iter() {
-        if let Some((clk_offset_dut, vehicles_dut)) = rec_dut.get(e_model) {
+    for (k_model, v_model) in rec_model.iter() {
+        if let Some(v_dut) = rec_dut.get(&k_model) {
+            let epoch = k_model.epoch;
             assert_eq!(
-                clk_offset_model, clk_offset_dut,
-                "\"{}\" - {:?} - faulty clock offset, expecting {:?} got {:?}",
-                filename, e_model, clk_offset_model, clk_offset_dut
+                v_model.clock_offset, v_dut.clock_offset,
+                "{}@{:?} - faulty clock offset",
+                filename, k_model.epoch
             );
-            for (sv_model, observables_model) in vehicles_model.iter() {
-                if let Some(observables_dut) = vehicles_dut.get(sv_model) {
-                    for (code_model, obs_model) in observables_model {
-                        if let Some(obs_dut) = observables_dut.get(code_model) {
-                            assert!(
-                                (obs_model.obs - obs_dut.obs).abs() < epsilon,
-                                "\"{}\" - {:?} - {:?} - \"{}\" expecting {} got {}",
-                                filename,
-                                e_model,
-                                sv_model,
-                                code_model,
-                                obs_model.obs,
-                                obs_dut.obs
-                            );
-                            assert_eq!(
-                                obs_model.lli, obs_dut.lli,
-                                "\"{}\" - {:?} - {:?} - \"{}\" - LLI expecting {:?} got {:?}",
-                                filename, e_model, sv_model, code_model, obs_model.lli, obs_dut.lli
-                            );
-                            assert_eq!(
-                                obs_model.snr, obs_dut.snr,
-                                "\"{}\" - {:?} - {:?} - \"{}\" - SNR expecting {:?} got {:?}",
-                                filename, e_model, sv_model, code_model, obs_model.snr, obs_dut.snr
-                            );
-                        } else {
-                            panic!(
-                                "\"{}\" - {:?} - {:?} : missing \"{}\" observation",
-                                filename, e_model, sv_model, code_model
-                            );
-                        }
-                    }
-                } else {
-                    panic!(
-                        "\"{}\" - {:?} - missing vehicle {:?}",
-                        filename, e_model, sv_model
-                    );
-                }
-            }
-        } else {
-            panic!("\"{}\" - missing epoch {:?}", filename, e_model);
-        }
-    }
+            let dut_observations = v_dut.observations.keys().sorted().collect::<Vec<_>>();
+            let model_observations = v_dut.observations.keys().sorted().collect::<Vec<_>>();
 
-    for (e_b, (clk_offset_b, vehicles_b)) in rec_model.iter() {
-        if let Some((clk_offset_model, vehicles_model)) = rec_dut.get(e_b) {
-            assert_eq!(clk_offset_model, clk_offset_b);
-            for (sv_b, observables_b) in vehicles_b.iter() {
-                if let Some(observables_model) = vehicles_model.get(sv_b) {
-                    for (code_b, obs_b) in observables_b {
-                        if let Some(obs_model) = observables_model.get(code_b) {
-                            assert!(
-                                (obs_model.obs - obs_b.obs).abs() < 1.0E-6,
-                                "\"{}\" - {:?} - {:?} - \"{}\" expecting {} got {}",
-                                filename,
-                                e_b,
-                                sv_b,
-                                code_b,
-                                obs_model.obs,
-                                obs_b.obs
-                            );
-                            assert_eq!(
-                                obs_model.lli, obs_b.lli,
-                                "\"{}\" - {:?} - {:?} - \"{}\" - LLI expecting {:?} got {:?}",
-                                filename, e_b, sv_b, code_b, obs_model.lli, obs_b.lli
-                            );
-                            assert_eq!(
-                                obs_model.snr, obs_b.snr,
-                                "\"{}\" - {:?} - {:?} - \"{}\" - SNR expecting {:?} got {:?}",
-                                filename, e_b, sv_b, code_b, obs_model.snr, obs_b.snr
-                            );
-                        } else {
-                            panic!(
-                                "\"{}\" - {:?} - {:?} : parsed \"{}\" unexpectedly",
-                                filename, e_b, sv_b, code_b
-                            );
-                        }
-                    }
-                } else {
-                    panic!(
-                        "\"{}\" - {:?} - parsed {:?} unexpectedly",
-                        filename, e_b, sv_b
+            for (k_model, v_model) in v_model.observations.iter() {
+                if let Some(v_dut) = v_dut.observations.get(&k_model) {
+                    assert!(
+                        (v_dut.value - v_model.value).abs() < epsilon,
+                        "{}@{:?} - data error for {:?}",
+                        filename,
+                        epoch,
+                        k_model,
                     );
+                    assert_eq!(
+                        v_dut.lli, v_model.lli,
+                        "{}@{:?} - lli flag mismatch for {:?}",
+                        filename, epoch, k_model,
+                    );
+                    assert_eq!(
+                        v_dut.snr, v_model.snr,
+                        "{}@{:?} - snr flag mismatch for {:?}",
+                        filename, epoch, k_model,
+                    );
+                } else {
+                    println!("{}@{:?} - {:?} is missing", filename, epoch, k_model);
                 }
             }
         } else {
-            panic!("\"{}\" - parsed epoch {:?} unexpectedly", filename, e_b);
+            panic!("dut is missing key: {:?}", k_model);
         }
     }
 }

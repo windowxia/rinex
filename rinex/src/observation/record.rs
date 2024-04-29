@@ -181,19 +181,23 @@ impl Record {
     }
 }
 
-/// Entries are sorted by [Epoch], and [EpochFlag]
+/// RecordKey is the Observation Record indexer
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct RecordKey {
+    /// Sampling [Epoch]
     pub epoch: Epoch,
+    /// [EpochFlag] provides more information on sampling context
     pub flag: EpochFlag,
 }
 
-/// Observations are sorted by SV and by Observable
+/// ObservationKey is the Observations content indexer
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ObservationKey {
+    /// [SV]: Satellite Vehicle
     pub sv: SV,
+    /// [Observable] determines the actual measurement
     pub observable: Observable,
 }
 
@@ -206,7 +210,7 @@ pub type Observations = BTreeMap<ObservationKey, ObservationData>;
 pub struct RecordEntry {
     /// RX Clock offset to timescale, expressed in [s]
     pub clock_offset: Option<f64>,
-    /// List of observations
+    /// List of [ObservationData] sorted by [ObservationKey]
     pub observations: Observations,
 }
 
@@ -260,7 +264,7 @@ pub(crate) fn parse_epoch(
 
     // Epoch
     let offset = match header.version.major {
-        1 | 2 => " 21 12 21  0  0  0.0000000".len(),
+        1 | 2 => " 21 12 21  0  0 30.0000000".len(),
         _ => {
             // line starts with ">"
             line = line.split_at(1).1;
@@ -279,7 +283,7 @@ pub(crate) fn parse_epoch(
         .map_err(|_| Error::NumSatParsing)?;
 
     // grab possible clock offset
-    let offs: Option<&str> = match header.version.major < 2 {
+    let ck_off: Option<&str> = match header.version.major < 2 {
         true => {
             // RINEX 2
             // clock offsets are last 12 characters
@@ -307,15 +311,15 @@ pub(crate) fn parse_epoch(
             }
         },
     };
-    let clock_offset: Option<f64> = match offs.is_some() {
-        true => {
-            if let Ok(f) = f64::from_str(offs.unwrap()) {
+    let clock_offset: Option<f64> = match ck_off {
+        Some(content) => {
+            if let Ok(f) = f64::from_str(content.trim()) {
                 Some(f)
             } else {
                 None // parsing failed for some reason
             }
         },
-        false => None, // empty field
+        None => None, // empty field
     };
 
     let observations = match flag {
@@ -323,7 +327,11 @@ pub(crate) fn parse_epoch(
             parse_observations(header, n_sat, rem, lines)?
         },
         _ => {
-            /* EPOCH event not handled yet */
+            /*
+             * EPOCH event not handled yet
+             * Best solution is most likely to return a meaningful error
+             * and catch it at higher level
+             */
             Default::default()
         },
     };
@@ -348,14 +356,12 @@ fn parse_observations(
     let observables = &obs.codes;
     match header.version.major {
         2 => {
-            // grab system descriptions
-            //  current line remainder
-            //  and possible following lines
-            // This remains empty on RINEX3, because we have such information
-            // on following lines, which is much more convenient
+            // SV system descriptor
             let mut systems = String::with_capacity(24 * 3); //SVNN
-            systems.push_str(rem.trim());
-            while systems.len() / 3 < n_sat.into() {
+            systems.push_str(rem.trim()); // first line always contained
+                                          // append the required amount of extra lines
+            let extra = if n_sat < 13 { 0 } else { n_sat / 12 - 1 };
+            for _ in 0..extra {
                 if let Some(l) = lines.next() {
                     systems.push_str(l.trim());
                 } else {
@@ -387,8 +393,7 @@ fn parse_v2_observations(
     let mut sv = SV::default();
     let mut observables: &Vec<Observable>;
     let mut observations = Observations::new();
-    //println!("{:?}", header_observables); // DEBUG
-    //println!("\"{}\"", systems); // DEBUG
+    // dbg!("\"{}\"", systems);
 
     // parse first system we're dealing with
     if systems.len() < svnn_size {
@@ -413,13 +418,14 @@ fn parse_v2_observations(
             },
             Some(c) => {
                 if let Ok(prn) = system.trim().parse::<u8>() {
-                    sv = SV::from_str(&format!("{}{:02}", c, prn))?;
+                    sv = SV::from_str(&format!("{:x}{:02}", c, prn))?;
                 }
             },
         }
     }
+
+    // dbg!("\"{}\"={}", system, sv);
     sv_ptr += svnn_size; // increment pointer
-                         //println!("\"{}\"={}", system, sv); // DEBUG
 
     // grab observables for this vehicle
     observables = match sv.constellation.is_sbas() {
@@ -442,7 +448,7 @@ fn parse_v2_observations(
 
     for line in lines {
         // browse all lines provided
-        //println!("parse_v2: \"{}\"", line); //DEBUG
+        // println!("parse_v2: \"{}\"", line); //DEBUG
         let line_width = line.len();
         if line_width < 10 {
             // line is empty: add maximal amount of vehicles possible
@@ -452,8 +458,7 @@ fn parse_v2_observations(
             //println!("\nLINE: \"{}\"", line); //DEBUG
             let nb_obs = num_integer::div_ceil(line_width, observable_width); // nb observations in this line
 
-            //println!("NB OBS: {}", nb_obs); //DEBUG
-            // parse all obs
+            // println!("NB OBS: {}", nb_obs); //DEBUG
             for i in 0..nb_obs {
                 obs_ptr += 1;
                 if obs_ptr > observables.len() {
@@ -469,7 +474,7 @@ fn parse_v2_observations(
                         &line[start..end]
                     },
                 };
-                //println!("WORK CONTENT \"{}\"", slice); //DEBUG
+                // println!("WORK CONTENT \"{}\"", slice); //DEBUG
                 //TODO: improve please
                 let obs = &slice[0..std::cmp::min(slice.len(), 14)]; // trimmed observations
                                                                      //println!("OBS \"{}\"", obs); //DEBUG
@@ -477,19 +482,26 @@ fn parse_v2_observations(
                 let mut snr: Option<SNR> = None;
                 if let Ok(value) = obs.trim().parse::<f64>() {
                     // parse obs
-                    if slice.len() > 14 {
-                        let lli_str = &slice[14..15];
+                    if slice.len() > 13 {
+                        let lli_str = &slice[13..14];
                         if let Ok(u) = lli_str.parse::<u8>() {
                             lli = LliFlags::from_bits(u);
                         }
-                        if slice.len() > 15 {
-                            let snr_str = &slice[15..16];
+                        if slice.len() > 14 {
+                            let snr_str = &slice[14..15];
                             if let Ok(s) = SNR::from_str(snr_str) {
                                 snr = Some(s);
                             }
                         }
                     }
-                    //println!("{} {:?} {:?} ==> {}", obs, lli, snr, obscodes[obs_ptr-1]); //DEBUG
+                    println!(
+                        "{} {:?} ==> {}|{:?}|{:?}",
+                        sv,
+                        observables[obs_ptr - 1],
+                        value,
+                        lli,
+                        snr
+                    ); //DEBUG
                     observations.insert(
                         ObservationKey {
                             sv,
@@ -524,13 +536,13 @@ fn parse_v2_observations(
                 match header.constellation {
                     Some(c) => {
                         if let Ok(prn) = system.trim().parse::<u8>() {
-                            sv = SV::from_str(&format!("{}{:02}", c, prn))?;
+                            sv = SV::from_str(&format!("{:x}{:02}", c, prn))?;
                         }
                     },
                     _ => unreachable!(),
                 }
             }
-            //println!("\"{}\"={}", system, sv); //DEBUG
+            // println!("\"{}\"={}", system, sv); //DEBUG
             sv_ptr += svnn_size; // increment pointer
 
             // grab observables for this vehicle
@@ -770,13 +782,13 @@ fn fmt_epoch_v2(header: &Header, key: &RecordKey, entry: &RecordEntry) -> Result
     ));
 
     for (index, sv) in unique_sv.iter().enumerate() {
-        if index % 12 == 0 {
-            if index == 12 {
-                // clock offset on first time
-                if let Some(clk) = clock_offset {
-                    lines.push_str(&format!(" {:9.1}", clk));
-                }
+        if index == 12 {
+            // clock offset on first time
+            if let Some(clk) = clock_offset {
+                lines.push_str(&format!(" {:9.1}", clk));
             }
+        }
+        if (index + 1) % 12 == 0 {
             // tab
             lines.push_str("\n                                ");
         }
@@ -798,7 +810,7 @@ fn fmt_epoch_v2(header: &Header, key: &RecordKey, entry: &RecordEntry) -> Result
             },
         };
 
-        for (obs_index, observable) in observables.iter().enumerate() {
+        for (obs_index, observable) in observables.iter().sorted().enumerate() {
             if obs_index % 5 == 0 {
                 lines.push('\n');
             }
@@ -806,16 +818,20 @@ fn fmt_epoch_v2(header: &Header, key: &RecordKey, entry: &RecordEntry) -> Result
                 sv,
                 observable: observable.clone(),
             }) {
-                lines.push_str(&format!("{:14.3}", obs_data.value));
+                if obs_index % 5 == 0 {
+                    lines.push_str(&format!("{:12.3}", obs_data.value));
+                } else {
+                    lines.push_str(&format!("{:14.3}", obs_data.value));
+                }
                 if let Some(flag) = obs_data.lli {
                     lines.push_str(&format!("{:x}", flag.bits()));
                 } else {
-                    lines.push(' ');
+                    lines.push_str(" ");
                 }
                 if let Some(snr) = obs_data.snr {
                     lines.push_str(&format!("{:x}", snr));
                 } else {
-                    lines.push(' ');
+                    lines.push_str(" ");
                 }
             } else {
                 // missing observations are blanked
@@ -1578,138 +1594,148 @@ impl Substract for Record {
 
 #[cfg(test)]
 mod test {
+    use super::{fmt_epoch, is_new_epoch, parse_epoch};
     use crate::{
-        observation::{
-            HeaderFields,
-        },
-        prelude::{Version, EpochFlag, TimeScale, Header},
         epoch::parse_utc as utc_epoch_parser,
+        observation::HeaderFields,
+        prelude::{Constellation, Epoch, EpochFlag, Header, Observable, TimeScale, Version},
     };
-    use super::{parse_epoch, fmt_epoch, is_new_epoch};
-    fn parse_and_format_helper(ver: Version, epoch_str: &str, expected_flag: EpochFlag) {
-        let first = utc_epoch_parser("2020 01 01 00 00  0.1000000").unwrap();
-        let obs_header = HeaderFields::default().with_time_of_first_obs(first);
-
+    use itertools::Itertools;
+    use std::str::FromStr;
+    #[test]
+    fn test_parse_v2() {
+        let t0 = Epoch::from_str("2021-12-21T00:00:00 GPST").unwrap();
+        let mut obs_header = HeaderFields::default().with_time_of_first_obs(t0);
+        for code in ["L1", "L2", "C1", "C2", "P1", "P2", "D1", "D2", "S1", "S2"] {
+            let obs = Observable::from_str(code).unwrap();
+            if let Some(codes) = obs_header.codes.get_mut(&Constellation::GPS) {
+                codes.push(obs.clone());
+            } else {
+                obs_header
+                    .codes
+                    .insert(Constellation::GPS, vec![obs.clone()]);
+            }
+            if let Some(codes) = obs_header.codes.get_mut(&Constellation::Glonass) {
+                codes.push(obs.clone());
+            } else {
+                obs_header
+                    .codes
+                    .insert(Constellation::Glonass, vec![obs.clone()]);
+            }
+        }
         let header = Header::default()
-            .with_version(ver)
+            .with_version(Version { major: 2, minor: 0 })
+            .with_constellation(Constellation::GPS)
             .with_observation_fields(obs_header);
+        for (descriptor, epoch, flag, num_sat) in [
+            (
+                " 21 12 21  0  0  0.0000000  0  1G07
+131857102.133 6 102745756.54245  25091572.300
+25091565.600        -411.138        -320.373          37.350          35.300",
+                Epoch::from_str("2021-12-21T00:00:00 GPST").unwrap(),
+                EpochFlag::Ok,
+                1,
+            ),
+            (
+                " 21 01 01 00 00 00.0000000  0 24G07G08G10G13G15G16G18G20G21G23G26G27
+                                G30R01R02R03R08R09R15R16R17R18R19R24
+  24178026.635 6  24178024.891 6                 127056391.69906  99004963.01703
+                  24178026.139 3  24178024.181 3        38.066          22.286  
+                
+  21866748.928 7  21866750.407 7  21866747.537 8 114910552.08207  89540700.32608
+  85809828.27608  21866748.200 8  21866749.482 8        45.759          49.525  
+        52.161  
+  21458907.960 8  21458908.454 7  21458905.489 8 112767333.29708  87870655.27209
+  84209365.43808  21458907.312 9  21458908.425 9        50.526          55.388  
+        53.157  
+  25107711.730 5                                 131941919.38305 102811868.09001
+                  25107711.069 1  25107709.586 1        33.150           8.952  
+                
+  24224693.760 6  24224693.174 5                 127301651.00206  99196079.53805
+                  24224693.407 5  24224691.898 5        36.121          31.645  
+                
+  21749627.212 8                                 114295057.63608  89061063.16706
+                  21749626.220 6  21749624.795 6        48.078          39.240  
+                
+  23203962.113 6  23203960.554 6  23203963.222 7 121937655.11806  95016353.74904
+  91057352.20207  23203961.787 4  23203960.356 4        41.337          28.313  
+        46.834  
+  21336671.709 7                                 112124979.20907  87370110.32706
+                  21336670.444 6  21336669.290 6        47.463          39.510  
+                
+  23746180.287 6                                 124787018.18706  97236633.91403
+                  23746179.022 3  23746178.067 3        38.820          22.819  
+                
+  21413431.070 7  21413429.404 7  21413431.981 8 112528356.08507  87684432.45406
+  84030922.83008  21413430.740 6  21413429.066 6        47.698          40.362  
+        52.487  
+  23960478.475 6  23960480.103 6  23960477.163 7 125913155.35006  98114150.90306
+  94026064.18807  23960477.733 6  23960479.641 6        39.261          36.752  
+        42.698  
+  20160980.296 8  20160980.485 8  20160978.441 9 105946683.25408  82555869.20609
+  79116040.25909  20160979.559 9  20160980.098 9        51.584          58.520  
+        55.715  
+  24895095.878 6  24895095.931 5  24895094.407 6 130824617.27906 101941255.30503
+  97693699.82606  24895095.087 3  24895095.779 3        37.800          20.405  
+        41.373  
+  21976735.287 7  21976740.713 6                 117478268.97407  91372016.95306
+                                                        43.731          39.712  
+                
+  21452856.821 8  21452861.434 7                 114476565.58608  89037342.61407
+                                                        48.976          45.633  
+                
+  24356366.067 6  24356369.934 6                 130381530.94906 101407869.02906
+                                                        40.212          40.570  
+                
+  24640492.817 5  24640495.563 5                 131948754.31105 102626826.44805
+                                                        31.019          35.719  
+                
+  22631771.515 7  22631773.097 7                 120852362.72507  93996312.56907
+                                                        45.041          42.955  
+                
+  22333745.843 7  22333750.087 6                 119344755.47207  92823708.20506
+                                                        47.198          41.178  
+                
+  20767116.205 7  20767118.004 7                 110934198.55007  86282150.62307
+                                                        46.750          44.206  
+                
+  19609338.615 8  19609342.136 8                 104933562.47908  81615007.54508
+                                                        53.404          49.913  
+                
+  20155814.670 8  20155818.459 8                 107593135.54008  83683576.27208
+                                                        52.338          49.531  
+                
+  23769631.385 5  23769635.136 6                 127151515.87305  98895637.55806
+                                                        32.323          37.626  
+                
+  23219147.863 6  23219153.271 6                 124163221.43806  96571415.97606
+                                                        41.318          39.432",
+                Epoch::from_str("2021-01-01T00:00:00 GPST").unwrap(),
+                EpochFlag::Ok,
+                24,
+            ),
+        ] {
+            let parsed = parse_epoch(&header, descriptor, TimeScale::GPST);
+            assert!(parsed.is_ok(), "parsing error: {}", parsed.err().unwrap());
+            let (key, entry) = parsed.unwrap();
+            assert_eq!(key.epoch, epoch);
+            assert_eq!(key.flag, flag);
+            assert!(entry.clock_offset.is_none());
 
-        let ts = TimeScale::UTC;
-        let clock_offset: Option<f64> = None;
+            let unique_sv = entry
+                .observations
+                .iter()
+                .map(|(k, _)| k.sv)
+                .unique()
+                .collect::<Vec<_>>();
+            assert_eq!(unique_sv.len(), num_sat, "bad number of SV");
 
-        let content = parse_epoch(&header, epoch_str, ts);
-        assert!(content.is_ok(), "failed to parse \"{}\"", epoch_str);
-
-        let (key, entry) = content.unwrap();
-        let formatted = fmt_epoch(&header, key, entry);
-        assert!(formatted.is_ok(), "failed to format epoch");
-        assert_eq!(formatted, epoch_str, "epoch formatting reciprocal");
-    }
-    #[test]
-    fn test_v2_parse_and_format() {
-        parse_and_format_helper(
-            Version { major: 2, minor: 0 },
-            " 21 12 21  0  0 30.0000000  0  0",
-            EpochFlag::Ok,
-        );
-        parse_and_format_helper(
-            Version { major: 2, minor: 0 },
-            " 21 12 21  0  0 30.0000000  1  0",
-            EpochFlag::PowerFailure,
-        );
-        parse_and_format_helper(
-            Version { major: 2, minor: 0 },
-            " 21 12 21  0  0 30.0000000  2  0",
-            EpochFlag::AntennaBeingMoved,
-        );
-        parse_and_format_helper(
-            Version { major: 2, minor: 0 },
-            " 21 12 21  0  0 30.0000000  3  0",
-            EpochFlag::NewSiteOccupation,
-        );
-        parse_and_format_helper(
-            Version { major: 2, minor: 0 },
-            " 21 12 21  0  0 30.0000000  4  0",
-            EpochFlag::HeaderInformationFollows,
-        );
-        parse_and_format_helper(
-            Version { major: 2, minor: 0 },
-            " 21 12 21  0  0 30.0000000  5  0",
-            EpochFlag::ExternalEvent,
-        );
-        parse_and_format_helper(
-            Version { major: 2, minor: 0 },
-            " 21 12 21  0  0 30.0000000  6  0",
-            EpochFlag::CycleSlip,
-        );
-    }
-    #[test]
-    fn test_v3_parse_and_format() {
-        parse_and_format_helper(
-            Version { major: 3, minor: 0 },
-            "> 2021 12 21 00 00 30.0000000  0  0",
-            EpochFlag::Ok,
-        );
-        parse_and_format_helper(
-            Version { major: 3, minor: 0 },
-            "> 2021 12 21 00 00 30.0000000  1  0",
-            EpochFlag::PowerFailure,
-        );
-        parse_and_format_helper(
-            Version { major: 3, minor: 0 },
-            "> 2021 12 21 00 00 30.0000000  2  0",
-            EpochFlag::AntennaBeingMoved,
-        );
-        parse_and_format_helper(
-            Version { major: 3, minor: 0 },
-            "> 2021 12 21 00 00 30.0000000  3  0",
-            EpochFlag::NewSiteOccupation,
-        );
-        parse_and_format_helper(
-            Version { major: 3, minor: 0 },
-            "> 2021 12 21 00 00 30.0000000  4  0",
-            EpochFlag::HeaderInformationFollows,
-        );
-        parse_and_format_helper(
-            Version { major: 3, minor: 0 },
-            "> 2021 12 21 00 00 30.0000000  5  0",
-            EpochFlag::ExternalEvent,
-        );
-        parse_and_format_helper(
-            Version { major: 3, minor: 0 },
-            "> 2021 12 21 00 00 30.0000000  6  0",
-            EpochFlag::CycleSlip,
-        );
-    }
-    #[test]
-    fn test_is_new_epoch() {
-        assert!(is_new_epoch(
-            "95 01 01 00 00 00.0000000  0  7 06 17 21 22 23 28 31",
-            Version { major: 2, minor: 0 }
-        ));
-        assert!(!is_new_epoch(
-            "21700656.31447  16909599.97044          .00041  24479973.67844  24479975.23247",
-            Version { major: 2, minor: 0 }
-        ));
-        assert!(is_new_epoch(
-            "95 01 01 11 00 00.0000000  0  8 04 16 18 19 22 24 27 29",
-            Version { major: 2, minor: 0 }
-        ));
-        assert!(!is_new_epoch(
-            "95 01 01 11 00 00.0000000  0  8 04 16 18 19 22 24 27 29",
-            Version { major: 3, minor: 0 }
-        ));
-        assert!(is_new_epoch(
-            "> 2022 01 09 00 00 30.0000000  0 40",
-            Version { major: 3, minor: 0 }
-        ));
-        assert!(!is_new_epoch(
-            "> 2022 01 09 00 00 30.0000000  0 40",
-            Version { major: 2, minor: 0 }
-        ));
-        assert!(!is_new_epoch(
-            "G01  22331467.880   117352685.28208        48.950    22331469.28",
-            Version { major: 3, minor: 0 }
-        ));
+            let reciprocal = fmt_epoch(&header, &key, &entry);
+            assert!(
+                reciprocal.is_ok(),
+                "failed to dump back to string: {}",
+                reciprocal.err().unwrap()
+            );
+        }
     }
 }

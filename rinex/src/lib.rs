@@ -90,21 +90,13 @@ pub mod prelude {
     #[cfg(feature = "doris")]
     pub use crate::doris::{ObservationData as DorisObservationData, Station};
     #[cfg(feature = "obs")]
-    pub use crate::observation::{
-        EpochFlag,
-        LliFlags,
-    };
+    pub use crate::observation::{EpochFlag, LliFlags};
     pub use crate::{
-        Error,
-        Rinex,
-        types::Type as RinexType,
-        version::Version,
-        observable::Observable,
-        header::Header,
-        ground_position::GroundPosition,
+        ground_position::GroundPosition, header::Header, observable::Observable,
+        types::Type as RinexType, version::Version, Error, Rinex,
     };
     // gnss_rs re-export
-    pub use gnss::prelude::{Constellation, SV, COSPAR, DOMES, DomesTrackingPoint};
+    pub use gnss::prelude::{Constellation, DomesTrackingPoint, COSPAR, DOMES, SV};
     // hifitime re-export
     pub use hifitime::{Duration, Epoch, TimeScale, TimeSeries};
 }
@@ -566,7 +558,7 @@ impl Rinex {
     pub fn last_epoch(&self) -> Option<Epoch> {
         self.epoch().last()
     }
-    /// Returns total time span as a [`Duration`] 
+    /// Returns total time span as a [`Duration`]
     pub fn duration(&self) -> Option<Duration> {
         let start = self.first_epoch()?;
         let end = self.last_epoch()?;
@@ -3022,10 +3014,7 @@ mod test {
     use std::str::FromStr;
     #[test]
     fn test_macros() {
-        assert_eq!(
-            observable!("L1C"),
-            Observable::Phase("L1C".to_string())
-        );
+        assert_eq!(observable!("L1C"), Observable::Phase("L1C".to_string()));
     }
     use crate::{fmt_comment, is_rinex_comment};
     #[test]
