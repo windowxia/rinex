@@ -34,7 +34,7 @@ mod test {
             "2.10",
             Some("GPS"),
             "GPS",
-            "G31,G27,G03,G32,G16,G14,G08,G23,G22,G07, G30, G11, G19, G07",
+            "G01,G06,G09,G31,G17,G26,G28,G27,G03,G32,G16,G14,G08,G23,G22,G07, G30, G11, G19, G07",
             "C1, L1, L2, P2, P1",
             Some("2017-01-01T00:00:00 GPST"),
             None,
@@ -120,16 +120,35 @@ mod test {
         assert!(rinex.is_ok());
         let rinex = rinex.unwrap();
 
-        test_observation_rinex(&rinex, "2.11", Some("MIXED"), "GPS, GLO", 
-            "G07, G08, G10, G13, G15, G16, G18, G21, G23, G26, G27, G30, R01, R02, R03, R08, R09, R15, R16, R17, R18, R19, R24", "C1, C2, C5, L1, L2, L5, P1, P2, S1, S2, S5", Some("2021-01-01T00:00:00 GPST"), Some("2021-01-01T23:59:30 GPST"), 
-            erratic_time_frame!("
+        test_observation_rinex(
+            &rinex,
+            "2.11",
+            Some("MIXED"),
+            "GPS, GLO",
+            "G07,G08,G10,G13,G15,G16,G18,G20,G21,G23,G26,G27,
+G30,R01,R02,R03,R08,R09,R15,R16,R17,R18,R19,R24,
+G07,G08,G10,G13,G15,G16,G18,G20,G21,G23,G26,G27,G30,R01,R02,
+R03,R08,R09,R15,R16,R17,R18,R19,R24,G01,G07,G08,G10,G14,G15,
+G16,G20,G21,G22,G23,G27,G28,G30,G32,R01,R02,R03,R04,R09,R10,R16,R17,R18,R19,
+G01,G03,G08,G10,G14,G21,G22,G24,G27,G28,G32,R02,
+R03,R04,R09,R10,R17,R18,R19,R20,
+G01,G03,G08,G10,G14,G21,G22,G24,G27,G28,G32,R02,
+R03,R04,R09,R10,R17,R18,R19,R20,
+G01,G03,G08,G10,G14,G21,G22,G24,G27,G28,G32,R02,
+R03,R04,R09,R10,R17,R18,R19,R20",
+            "C1, C2, C5, L1, L2, L5, P1, P2, S1, S2, S5",
+            Some("2021-01-01T00:00:00 GPST"),
+            Some("2021-01-01T23:59:30 GPST"),
+            erratic_time_frame!(
+                "
                 2021-01-01T00:00:00 GPST,
                 2021-01-01T00:00:30 GPST,
                 2021-01-01T01:10:00 GPST,
                 2021-01-01T02:25:00 GPST,
                 2021-01-01T02:25:30 GPST,
                 2021-01-01T02:26:00 GPST
-            ")
+            "
+            ),
         );
 
         /* This file is GPS + GLO */
@@ -722,175 +741,4 @@ mod test {
             "IRNSS sv badly identified"
         );
     }
-    /*
-        #[test]
-        fn obs_v3_duth0630_processing() {
-            let rinex = Rinex::from_file("../test_resources/OBS/V3/DUTH0630.22O")
-                .unwrap();
-            let record = rinex.record.as_obs()
-                .unwrap();
-
-            // MIN
-            let min = record.min();
-            let g01 = min.get(&SV::from_str("G01").unwrap()).unwrap();
-            let s1c = g01.get(&Observable::from_str("S1C").unwrap()).unwrap();
-            assert_eq!(*s1c, 49.5);
-
-            // MAX
-            let max = record.max();
-            let g01 = max.get(&SV::from_str("G01").unwrap()).unwrap();
-            let s1c = g01.get(&Observable::from_str("S1C").unwrap()).unwrap();
-            assert_eq!(*s1c, 51.250);
-
-            // MEAN
-            let mean = record.mean();
-            let g01 = mean.get(&SV::from_str("G01").unwrap()).unwrap();
-            let s1c = g01.get(&Observable::from_str("S1C").unwrap()).unwrap();
-            assert_eq!(*s1c, (51.250 + 50.750 + 49.5)/3.0);
-
-            let g06 = mean.get(&SV::from_str("G06").unwrap()).unwrap();
-            let s1c = g06.get(&Observable::from_str("S1C").unwrap()).unwrap();
-            assert_eq!(*s1c, 43.0);
-
-            // STDVAR
-            let stdvar = record.stdvar();
-            let mean = (51.25_f64 + 50.75_f64 + 49.5_f64)/3.0_f64;
-            let expected = ((51.25_f64 - mean).powf(2.0_f64) + (50.75_f64 - mean).powf(2.0_f64) + (49.5_f64 - mean).powf(2.0_f64)) / 3.0f64;
-            let g01 = stdvar.get(&SV::from_str("G01").unwrap()).unwrap();
-            let s1c =  g01.get(&Observable::from_str("S1C").unwrap()).unwrap();
-            assert_eq!(*s1c, expected);
-        }
-        fn test_combinations(combinations: Vec<(Observable, Observable)>, signals: Vec<Observable>) {
-            /*
-             * test nb of combinations
-             */
-            let mut nb_pr = 0;
-            let mut nb_ph = 0;
-            for sig in signals {
-                let code = sig.code();
-                if sig.is_phase_observable() {
-                    nb_pr += 1;
-                }
-                if sig.is_pseudorange_observable() {
-                    nb_ph += 1;
-                }
-            }
-            assert_eq!(combinations.len(), nb_pr-1+nb_ph-1, "Wrong number of combinations, expecting {} | got: {:?}", nb_pr+nb_ph-2, combinations);
-            /*
-             * test formed combinations
-             * (M > 1) => 1
-             * 1       => 2
-             */
-            for (lhs, reference) in combinations {
-                let lhs_code = lhs.to_string();
-                let reference_code = reference.to_string();
-                let lhs_carrier = &lhs_code[1..2];
-                let reference_carrier = &reference_code[1..2];
-                if lhs_carrier != "1" {
-                    assert_eq!(reference_carrier, "1");
-                } else {
-                    assert_eq!(reference_carrier, "2");
-                }
-            }
-        }
-        #[test]
-        fn obs_v2_aopr0010_17o() {
-            let rinex = Rinex::from_file("../test_resources/OBS/V2/aopr0010.17o")
-                .unwrap();
-            let record = rinex.record.as_obs()
-                .unwrap();
-            let mut signals = vec![
-                Observable::from_str("L1").unwrap(),
-                Observable::from_str("L2").unwrap(),
-                Observable::from_str("C1").unwrap(),
-                Observable::from_str("P1").unwrap(),
-                Observable::from_str("P2").unwrap(),
-            ];
-            for combination in [
-                Combination::GeometryFree,
-                Combination::NarrowLane,
-                Combination::WideLane,
-                Combination::MelbourneWubbena,
-            ] {
-                let combined = record.combine(combination);
-                let mut combinations: Vec<(Observable, Observable)> =
-                    combined.keys().map(|(lhs, rhs)| (lhs.clone(), rhs.clone())).collect();
-                test_combinations(combinations, signals.clone());
-            }
-            /*
-             * Iono Delay Detector
-             */
-            let dt = rinex.sampling_interval().unwrap();
-            let ionod = record.iono_delay_detector(dt);
-        }
-        #[test]
-        fn obs_v3_duth0630_gnss_combinations() {
-            let rinex = Rinex::from_file("../test_resources/OBS/V3/DUTH0630.22O")
-                .unwrap();
-            let record = rinex.record.as_obs()
-                .unwrap();
-            let mut signals = vec![
-                Observable::from_str("C1C").unwrap(),
-                Observable::from_str("C2W").unwrap(),
-                Observable::from_str("C2P").unwrap(),
-                Observable::from_str("L1C").unwrap(),
-                Observable::from_str("L2P").unwrap(),
-                Observable::from_str("L2W").unwrap(),
-            ];
-            for combination in [
-                Combination::GeometryFree,
-                Combination::NarrowLane,
-                Combination::WideLane,
-                Combination::MelbourneWubbena,
-            ] {
-                let combined = record.combine(combination);
-                let mut combinations: Vec<(Observable, Observable)> =
-                    combined.keys().map(|(lhs, rhs)| (lhs.clone(), rhs.clone())).collect();
-                test_combinations(combinations, signals.clone());
-            }
-            /*
-             * Iono Delay Detector
-             */
-            let dt = rinex.sampling_interval().unwrap();
-            let ionod = record.iono_delay_detector(dt);
-        }
-        #[test]
-        fn obs_v3_esbcd00dnk_r_2020_gnss_combinations() {
-            let rinex = Rinex::from_file("../test_resources/CRNX/V3/ESBC00DNK_R_20201770000_01D_30S_MO.crx.gz")
-                .unwrap();
-            let record = rinex.record.as_obs()
-                .unwrap();
-            let gf = record.combine(Combination::GeometryFree);
-            let mut combinations: Vec<(Observable, Observable)> =
-                gf.keys().map(|(lhs, rhs)| (lhs.clone(), rhs.clone())).collect();
-            let mut signals = vec![
-                Observable::from_str("C1C").unwrap(),
-                Observable::from_str("C1W").unwrap(),
-                Observable::from_str("C2I").unwrap(),
-                Observable::from_str("C2L").unwrap(),
-                Observable::from_str("C2W").unwrap(),
-                Observable::from_str("C5I").unwrap(),
-                Observable::from_str("C5Q").unwrap(),
-                Observable::from_str("C6C").unwrap(),
-                Observable::from_str("C6I").unwrap(),
-                Observable::from_str("C7I").unwrap(),
-                Observable::from_str("C7Q").unwrap(),
-                Observable::from_str("C8Q").unwrap(),
-
-                Observable::from_str("L1C").unwrap(),
-                Observable::from_str("L2I").unwrap(),
-                Observable::from_str("L2L").unwrap(),
-                Observable::from_str("L3Q").unwrap(),
-                Observable::from_str("L2W").unwrap(),
-                Observable::from_str("L5I").unwrap(),
-                Observable::from_str("L5Q").unwrap(),
-                Observable::from_str("L6C").unwrap(),
-                Observable::from_str("L6I").unwrap(),
-                Observable::from_str("L7I").unwrap(),
-                Observable::from_str("L7Q").unwrap(),
-                Observable::from_str("L8Q").unwrap(),
-            ];
-            test_combinations(combinations, signals);
-        }
-    */
 }
