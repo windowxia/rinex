@@ -11,12 +11,18 @@ use rinex_qc_traits::{MaskFilter, Masking};
 use super::{
     antex, clock,
     clock::{ClockKey, ClockProfile, Error as ClockError},
+    doris::record::{parse_epoch as parse_doris_epoch, Record as DorisRecord},
     hatanaka::{Compressor, Decompressor},
     header, ionex, is_rinex_comment, merge,
     merge::Merge,
-    meteo,
+    meteo::record::{
+        fmt_epoch as fmt_meteo_epoch, parse_epoch as parse_meteo_epoch, Record as MeteoRecord,
+    },
     navigation::Error as NavigationError,
-    observation::Error as ObservationError,
+    observation::{
+        record::{parse_epoch as parse_obs_epoch, Record as ObsRecord},
+        Error as ObservationError,
+    },
     reader::BufferedReader,
     split::Split,
     types::Type,
@@ -34,14 +40,15 @@ pub enum Record {
     ClockRecord(clock::Record),
     /// IONEX (Ionosphere maps) record, see [ionex::record::Record]
     IonexRecord(ionex::Record),
-    /// Meteo record, see [meteo::record::Record]
-    MeteoRecord(meteo::Record),
+    /// [MeteoRecord] describes Meteo RINEX content
+    MeteoRecord(MeteoRecord),
     /// Navigation record, see [navigation::record::Record]
     NavRecord(navigation::Record),
     /// Observation record, see [observation::record::Record]
-    ObsRecord(observation::Record),
-    /// DORIS RINEX, special DORIS measurements wraped as observations
-    DorisRecord(doris::Record),
+    /// [ObsRecord] describes Observation RINEX content
+    ObsRecord(ObsRecord),
+    /// [DorisRecord] contains special DORIS measurements wraped as observations
+    DorisRecord(DorisRecord),
 }
 
 /// Record comments are high level informations, sorted by epoch
@@ -92,15 +99,15 @@ impl Record {
             _ => None,
         }
     }
-    /// Unwraps self as MET record
-    pub fn as_meteo(&self) -> Option<&meteo::Record> {
+    /// Returns reference to [MeteoRecord]
+    pub fn as_meteo(&self) -> Option<&MeteoRecord> {
         match self {
             Record::MeteoRecord(r) => Some(r),
             _ => None,
         }
     }
-    /// Returns mutable reference to Meteo record
-    pub fn as_mut_meteo(&mut self) -> Option<&mut meteo::Record> {
+    /// Returns mutable reference to [MeteoRecord]
+    pub fn as_mut_meteo(&mut self) -> Option<&mut MeteoRecord> {
         match self {
             Record::MeteoRecord(r) => Some(r),
             _ => None,
@@ -120,29 +127,29 @@ impl Record {
             _ => None,
         }
     }
-    /// Unwraps self as OBS record
+    /// Returns reference to [ObsRecord]
     pub fn as_obs(&self) -> Option<&observation::Record> {
         match self {
             Record::ObsRecord(r) => Some(r),
             _ => None,
         }
     }
-    /// Returns mutable reference to Observation record
-    pub fn as_mut_obs(&mut self) -> Option<&mut observation::Record> {
+    /// Returns mutable reference to [ObsRecord]
+    pub fn as_mut_obs(&mut self) -> Option<&mut ObsRecord> {
         match self {
             Record::ObsRecord(r) => Some(r),
             _ => None,
         }
     }
-    /// Unwraps self as DORIS record
-    pub fn as_doris(&self) -> Option<&doris::Record> {
+    /// Returns reference to [DorisRecord]
+    pub fn as_doris(&self) -> Option<&DorisRecord> {
         match self {
             Record::DorisRecord(r) => Some(r),
             _ => None,
         }
     }
-    /// Unwraps self as mutable reference to DORIS record
-    pub fn as_mut_doris(&mut self) -> Option<&mut doris::Record> {
+    /// Returns mutable reference to [DorisRecord]
+    pub fn as_mut_doris(&mut self) -> Option<&mut DorisRecord> {
         match self {
             Record::DorisRecord(r) => Some(r),
             _ => None,
@@ -157,8 +164,8 @@ impl Record {
         match &header.rinex_type {
             Type::MeteoData => {
                 let record = self.as_meteo().unwrap();
-                for (epoch, data) in record.iter() {
-                    if let Ok(epoch) = meteo::record::fmt_epoch(epoch, data, header) {
+                for (epoch, observations) in record.iter() {
+                    if let Ok(epoch) = fmt_meteo_epoch(epoch, observations, header) {
                         let _ = write!(writer, "{}", epoch);
                     }
                 }
@@ -450,9 +457,10 @@ pub fn parse_record(
                         }
                     },
                     Type::MeteoData => {
-                        if let Ok((e, map)) = meteo::record::parse_epoch(header, &epoch_content) {
-                            met_rec.insert(e, map);
-                            comment_ts = e; // for comments classification & management
+                        if let Ok((epoch, observations)) = parse_meteo_epoch(header, &epoch_content)
+                        {
+                            comment_ts = epoch; // for comments classification & management
+                            met_rec.insert(epoch, observations);
                         }
                     },
                     Type::ClockData => {
@@ -541,20 +549,20 @@ pub fn parse_record(
             }
         },
         Type::ObservationData => {
-            if let Ok((k, v)) = observation::record::parse_epoch(header, &epoch_content, obs_ts) {
+            if let Ok((k, v)) = parse_obs_epoch(header, &epoch_content, obs_ts) {
                 comment_ts = k.epoch; // for comments classification + management
                 obs_rec.insert(k, v);
             }
         },
         Type::DORIS => {
-            if let Ok((e, map)) = doris::record::parse_epoch(header, &epoch_content) {
+            if let Ok((e, map)) = parse_doris_epoch(header, &epoch_content) {
                 dor_rec.insert(e, map);
             }
         },
         Type::MeteoData => {
-            if let Ok((e, map)) = meteo::record::parse_epoch(header, &epoch_content) {
-                met_rec.insert(e, map);
-                comment_ts = e; // for comments classification + management
+            if let Ok((epoch, observations)) = parse_meteo_epoch(header, &epoch_content) {
+                comment_ts = epoch; // for comments classification + management
+                met_rec.insert(epoch, observations);
             }
         },
         Type::ClockData => {

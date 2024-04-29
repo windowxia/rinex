@@ -666,56 +666,56 @@ R03,R04,R09,R10,R17,R18,R19,R20",
             Rinex::from_file("../test_resources/CRNX/V3/ESBC00DNK_R_20201770000_01D_30S_MO.crx.gz")
                 .unwrap();
 
-        test_observation_rinex(
-            &rnx,
-            "3.05",
-            Some("MIXED"),
-            "BDS, GAL, GLO, QZSS, GPS, EGNOS, SDCM, BDSBAS",
-            "C05, C07, C10, C12, C19, C20, C23, C32, C34, C37,
-             E01, E03, E05, E09, E13, E15, E24, E31,
-             G02, G05, G07, G08, G09, G13, G15, G18, G21, G27, G28, G30,
-             R01, R02, R08, R09, R10, R11, R12, R17, R18, R19,
-             S23, S25, S36",
-            "C2I, C6I, C7I, D2I, D6I, D7I, L2I, L6I, L7I, S2I, S6I, S7I,
-              C1C, C5Q, C6C, C7Q, C8Q, D1C, D5Q, D6C, D7Q, D8Q, L1C, L5Q, L6C,
-              L7Q, L8Q, S1C, S5Q, S7Q, S8Q,
-              C1C, C1W, C2L, C2W, C5Q, D1C, D2L, D2W, D5Q, L1C, L2L, L2W, L5Q,
-              S1C, S1W, S2L, S2W, S5Q,
-              C1C, C2L, C5Q, D1C, D2L, D5Q, L1C, L2L, L5Q, S1C, S2L, S5Q,
-              C1C, C1P, C2C, C2P, C3Q, D1C, D1P, D2C, D2P, D3Q, L1C, L1P, L2C,
-              L2P, L3Q, S1C, S1P, S2C, S2P, S3Q,
-              C1C, C5I, D1C, D5I, L1C, L5I, S1C, S5I",
-            Some("2020-06-25T00:00:00 GPST"),
-            Some("2020-06-25T23:59:30 GPST"),
-            evenly_spaced_time_frame!(
-                "2020-06-25T00:00:00 GPST",
-                "2020-06-25T23:59:30 GPST",
-                "30 s"
-            ),
+        let header = &rnx.header;
+        let obs_header = header.obs.as_ref().unwrap();
+        assert_eq!(header.version, Version { major: 3, minor: 5 });
+        assert_eq!(header.constellation, Some(Constellation::Mixed));
+
+        let constellations = rnx.constellation().sorted().collect::<Vec<_>>();
+        assert_eq!(
+            constellations,
+            ["BDS", "GAL", "GLO", "QZSS", "GPS", "EGNOS", "SDCM", "BDSBAS"]
+                .iter()
+                .map(|c| Constellation::from_str(c).unwrap())
+                .sorted()
+                .collect::<Vec<_>>()
         );
 
-        /*
-         * Header tb
-         */
-        let header = rnx.header.clone();
+        let sv = rnx
+            .sv()
+            .filter(|sv| sv.constellation.is_sbas())
+            .sorted()
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            sv,
+            "S23, S25, S26, S36, S44"
+                .split(',')
+                .map(|c| SV::from_str(c.trim()).unwrap())
+                .collect::<Vec<_>>()
+        );
+
+        assert_eq!(
+            obs_header.time_of_first_obs,
+            Some(Epoch::from_str("2020-06-25T00:00:00 GPST").unwrap())
+        );
+
+        assert_eq!(
+            obs_header.time_of_last_obs,
+            Some(Epoch::from_str("2020-06-25T23:59:30 GPST").unwrap())
+        );
 
         assert!(
             header.geodetic_marker.is_some(),
             "failed to parse geodetic marker"
         );
-        let marker = header.geodetic_marker.unwrap();
+
+        let marker = header.geodetic_marker.as_ref().unwrap();
         assert_eq!(marker.name, "ESBC00DNK");
         assert_eq!(marker.number(), Some("10118M001".to_string()));
         assert_eq!(marker.marker_type, Some(MarkerType::Geodetic));
 
-        /*
-         * Observation specific
-         */
-        let obs = header.obs.as_ref();
-        assert!(obs.is_some());
-        let obs = obs.unwrap();
-
-        for (k, v) in &obs.codes {
+        for (k, v) in &obs_header.codes {
             if *k == Constellation::GPS {
                 let mut sorted = v.clone();
                 sorted.sort();

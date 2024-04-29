@@ -38,11 +38,11 @@ fn is_constant_obs_record(record: &ObsRecord, constant: f64, tolerance: f64) {
 }
 
 fn is_constant_meteo_record(record: &MetRecord, constant: f64, tolerance: f64) {
-    for (_, observables) in record {
-        for (observable, observation) in observables {
-            let err = (observation - constant).abs();
+    for (t, observations) in record.iter() {
+        for (observable, value) in observations {
+            let err = (value - constant).abs();
             if err > tolerance {
-                panic!("{} observation {} != {}", observable, observation, constant);
+                panic!("@{:?} data error {} != {}", t, value, constant);
             }
         }
     }

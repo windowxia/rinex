@@ -1,16 +1,63 @@
 use crate::{
-    epoch, merge, merge::Merge, prelude::*, split, split::Split, types::Type, version, Observable,
+    epoch::{
+        format as epoch_formatter, parse_utc as parse_utc_epoch, ParsingError as EpochParsingError,
+    },
+    merge::{Error as MergeError, Merge},
+    prelude::*,
+    split::{Error as SplitError, Split},
+    types::Type,
+    version, Observable,
 };
 
 use hifitime::Duration;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{
+    btree_map::{Iter, IterMut},
+    BTreeMap, HashMap,
+};
 use std::str::FromStr;
 use thiserror::Error;
 
-/*
- * Meteo RINEX specific record type.
- */
-pub type Record = BTreeMap<Epoch, HashMap<Observable, f64>>;
+#[cfg(feature = "serde")]
+use serde::Serialize;
+
+/// Meteo Record content
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
+pub struct Record {
+    pub(crate) inner: BTreeMap<Epoch, Observations>,
+}
+
+/// Meteo Observations
+pub type Observations = HashMap<Observable, f64>;
+
+impl Record {
+    pub fn new() -> Self {
+        Self {
+            inner: BTreeMap::new(),
+        }
+    }
+    pub fn get(&self, key: &Epoch) -> Option<&Observations> {
+        self.inner.get(key)
+    }
+    pub fn get_mut(&mut self, key: &Epoch) -> Option<&mut Observations> {
+        self.inner.get_mut(key)
+    }
+    pub fn insert(&mut self, k: Epoch, v: Observations) {
+        self.inner.insert(k, v);
+    }
+    pub fn iter(&self) -> Iter<'_, Epoch, Observations> {
+        self.inner.iter()
+    }
+    pub fn iter_mut(&mut self) -> IterMut<'_, Epoch, Observations> {
+        self.inner.iter_mut()
+    }
+    pub fn retain<F>(&mut self, f: F)
+    where
+        F: FnMut(&Epoch, &mut Observations) -> bool,
+    {
+        self.inner.retain(f)
+    }
+}
 
 /*
  * Returns true if given line matches a new Meteo Record Epoch.
@@ -25,7 +72,7 @@ pub(crate) fn is_new_epoch(line: &str, v: version::Version) -> bool {
             return false;
         }
         let datestr = &line[1..min_len.len()];
-        epoch::parse_utc(datestr).is_ok() // valid epoch descriptor
+        parse_utc_epoch(datestr).is_ok() // valid epoch descriptor
     } else {
         let min_len = " 2021  1  7  0  0  0";
         if line.len() < min_len.len() {
@@ -33,7 +80,7 @@ pub(crate) fn is_new_epoch(line: &str, v: version::Version) -> bool {
             return false;
         }
         let datestr = &line[1..min_len.len()];
-        epoch::parse_utc(datestr).is_ok() // valid epoch descriptor
+        parse_utc_epoch(datestr).is_ok() // valid epoch descriptor
     }
 }
 
@@ -41,31 +88,23 @@ pub(crate) fn is_new_epoch(line: &str, v: version::Version) -> bool {
 /// Meteo Data `Record` parsing specific errors
 pub enum Error {
     #[error("failed to parse epoch")]
-    EpochParsingError(#[from] epoch::ParsingError),
-    #[error("failed to integer number")]
-    ParseIntError(#[from] std::num::ParseIntError),
-    #[error("failed to float number")]
-    ParseFloatError(#[from] std::num::ParseFloatError),
+    EpochParsing(#[from] EpochParsingError),
 }
 
 /*
  * Meteo record entry parsing method
  */
-pub(crate) fn parse_epoch(
-    header: &Header,
-    content: &str,
-) -> Result<(Epoch, HashMap<Observable, f64>), Error> {
+pub(crate) fn parse_epoch(header: &Header, content: &str) -> Result<(Epoch, Observations), Error> {
     let mut lines = content.lines();
     let mut line = lines.next().unwrap();
+    let mut observations = Observations::with_capacity(4);
 
-    let mut map: HashMap<Observable, f64> = HashMap::with_capacity(3);
-
-    let mut offset: usize = 18; // YY
+    let mut offset: usize = 18; // datetime
     if header.version.major > 2 {
         offset += 2; // YYYY
     }
 
-    let epoch = epoch::parse_utc(&line[0..offset])?;
+    let epoch = parse_utc_epoch(&line[0..offset])?;
 
     let codes = &header.meteo.as_ref().unwrap().codes;
     let nb_codes = codes.len();
@@ -79,20 +118,18 @@ pub(crate) fn parse_epoch(
                 Ok(f) => Some(f),
                 Err(_) => None,
             };
-
-            if let Some(obs) = obs {
-                map.insert(code.clone(), obs);
+            if let Some(value) = obs {
+                observations.insert(code.clone(), value);
             }
             code_index += 1;
             if code_index >= nb_codes {
                 break;
             }
-
             offset += 7;
             if offset >= line.len() {
                 break;
             }
-        } // 1:8
+        } // for()
 
         if i < nb_lines - 1 {
             if let Some(l) = lines.next() {
@@ -102,7 +139,7 @@ pub(crate) fn parse_epoch(
             }
         }
     } // nb lines
-    Ok((epoch, map))
+    Ok((epoch, observations))
 }
 
 /*
@@ -111,20 +148,20 @@ pub(crate) fn parse_epoch(
  */
 pub(crate) fn fmt_epoch(
     epoch: &Epoch,
-    data: &HashMap<Observable, f64>,
+    observations: &Observations,
     header: &Header,
 ) -> Result<String, Error> {
     let mut lines = String::with_capacity(128);
     lines.push_str(&format!(
         " {}",
-        epoch::format(*epoch, Type::MeteoData, header.version.major)
+        epoch_formatter(*epoch, Type::MeteoData, header.version.major)
     ));
     let observables = &header.meteo.as_ref().unwrap().codes;
     let mut index = 0;
     for obscode in observables {
         index += 1;
-        if let Some(data) = data.get(obscode) {
-            lines.push_str(&format!("{:7.1}", data));
+        if let Some(value) = observations.get(obscode) {
+            lines.push_str(&format!("{:7.1}", value));
         } else {
             lines.push_str("       ");
         }
@@ -137,18 +174,17 @@ pub(crate) fn fmt_epoch(
 }
 
 impl Merge for Record {
-    fn merge(&self, rhs: &Self) -> Result<Self, merge::Error> {
+    fn merge(&self, rhs: &Self) -> Result<Self, MergeError> {
         let mut lhs = self.clone();
         lhs.merge_mut(rhs)?;
         Ok(lhs)
     }
-    fn merge_mut(&mut self, rhs: &Self) -> Result<(), merge::Error> {
+    fn merge_mut(&mut self, rhs: &Self) -> Result<(), MergeError> {
         for (epoch, observations) in rhs.iter() {
-            if let Some(oobservations) = self.get_mut(epoch) {
-                for (observation, data) in observations.iter() {
-                    if !oobservations.contains_key(observation) {
-                        // new observation
-                        oobservations.insert(observation.clone(), *data);
+            if let Some(lhs_observations) = self.get_mut(epoch) {
+                for (observable, value) in observations.iter() {
+                    if !lhs_observations.contains_key(&observable) {
+                        lhs_observations.insert(observable.clone(), *value);
                     }
                 }
             } else {
@@ -161,7 +197,7 @@ impl Merge for Record {
 }
 
 impl Split for Record {
-    fn split(&self, epoch: Epoch) -> Result<(Self, Self), split::Error> {
+    fn split(&self, epoch: Epoch) -> Result<(Self, Self), SplitError> {
         let r0 = self
             .iter()
             .flat_map(|(k, v)| {
@@ -182,9 +218,9 @@ impl Split for Record {
                 }
             })
             .collect();
-        Ok((r0, r1))
+        Ok((Self { inner: r0 }, Self { inner: r1 }))
     }
-    fn split_dt(&self, _duration: Duration) -> Result<Vec<Self>, split::Error> {
+    fn split_dt(&self, _duration: Duration) -> Result<Vec<Self>, SplitError> {
         Ok(Vec::new())
     }
 }

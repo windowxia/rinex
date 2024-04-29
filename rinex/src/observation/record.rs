@@ -149,7 +149,7 @@ impl ObservationData {
 #[cfg_attr(feature = "serde", derive(Serialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Record {
-    pub inner: BTreeMap<RecordKey, RecordEntry>,
+    pub(crate) inner: BTreeMap<RecordKey, RecordEntry>,
 }
 
 impl Record {

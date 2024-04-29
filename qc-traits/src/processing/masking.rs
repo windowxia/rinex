@@ -144,13 +144,13 @@ impl std::str::FromStr for MaskFilter {
     }
 }
 
-/// Masking Trait, to retain or discard data subsets
+/// Masking Trait, to access, retain or discard data subsets
 pub trait Masking {
-    /// Applies [MaskFilter] returning a copied Self.
+    /// Applies [MaskFilter] returning a copied Self containing this subset only.
     fn mask(&self, mask: &MaskFilter) -> Self
     where
         Self: Sized;
-    /// Applies [MaskFilter] in place with mutable access.
+    /// Applies [MaskFilter] in place with mutable access, retaining this subset only.
     fn mask_mut(&mut self, mask: &MaskFilter);
 }
 

@@ -62,6 +62,7 @@ use crate::{
     antex::{Antenna, AntennaSpecific, FrequencyDependentData},
     doris::ObservationData as DorisObservationData,
     ionex::TECPlane,
+    meteo::record::Observations as MeteoObservations,
     observable::Observable,
     observation::{
         record::{RecordEntry as ObsRecordEntry, RecordKey as ObsRecordKey},
@@ -622,15 +623,14 @@ use crate::navigation::NavFrame;
 use itertools::Itertools; // .unique()
 
 impl Rinex {
-    /// Designs a Unique [Epoch] iterator, spanning all identified [Epoch]s
-    /// in chronological order
+    /// Returns an Iterator over all [Epoch]s in chronological order.
     pub fn epoch(&self) -> Box<dyn Iterator<Item = Epoch> + '_> {
         if let Some(r) = self.record.as_obs() {
-            Box::new(r.iter().map(|(k, _)| k.epoch))
+            Box::new(r.iter().map(|(k, _)| k.epoch).unique())
         } else if let Some(r) = self.record.as_nav() {
             Box::new(r.iter().map(|(k, _)| *k))
         } else if let Some(r) = self.record.as_meteo() {
-            Box::new(r.iter().map(|(k, _)| *k))
+            Box::new(r.iter().map(|(k, _)| *k).unique())
         } else if let Some(r) = self.record.as_clock() {
             Box::new(r.iter().map(|(k, _)| *k))
         } else if let Some(r) = self.record.as_ionex() {
@@ -750,16 +750,18 @@ impl Rinex {
     /// }
     /// ```
     pub fn sv_epoch(&self) -> Box<dyn Iterator<Item = (Epoch, Vec<SV>)> + '_> {
-        //if let Some(record) = self.record.as_obs() {
-        //    Box::new(
-        //        // grab all vehicles identified through all Epochs
-        //        // and fold them into individual lists
-        //        record.iter().map(|((epoch, _), (_clk, entries))| {
-        //            (*epoch, entries.keys().unique().cloned().collect())
-        //        }),
-        //    )
-        //} else
-        if let Some(record) = self.record.as_nav() {
+        if let Some(record) = self.record.as_obs() {
+            Box::new(
+                // grab all vehicles identified through all Epochs
+                // and fold them into individual lists
+                record.iter().map(|(k, v)| {
+                    (
+                        k.epoch,
+                        v.observations.keys().map(|k| k.sv).unique().collect(),
+                    )
+                }),
+            )
+        } else if let Some(record) = self.record.as_nav() {
             Box::new(
                 // grab all vehicles through all epochs,
                 // fold them into individual lists
@@ -833,18 +835,11 @@ impl Rinex {
         if let Some(rec) = self.record.as_obs() {
             Box::new(
                 rec.iter()
-                    .map(|(_, v)| v.observations.keys().map(|k| &k.observable))
-                    .fold(vec![], |mut list, items| {
-                        // create a unique list
-                        for item in items {
-                            if !list.contains(&item) {
-                                list.push(item);
-                            }
-                        }
-                        list
-                    })
-                    .into_iter(),
+                    .flat_map(|(_, v)| v.observations.keys().map(|k| &k.observable))
+                    .unique(),
             )
+        } else if let Some(rec) = self.record.as_meteo() {
+            Box::new(rec.iter().flat_map(|(_, v)| v.keys()).unique())
         } else if self.record.as_doris().is_some() {
             Box::new(
                 self.doris()
@@ -852,24 +847,6 @@ impl Rinex {
                         stations
                             .iter()
                             .flat_map(|(_station, observables)| observables.keys())
-                    })
-                    .fold(vec![], |mut list, items| {
-                        // create a unique list
-                        for item in items {
-                            if !list.contains(&item) {
-                                list.push(item);
-                            }
-                        }
-                        list
-                    })
-                    .into_iter(),
-            )
-        } else if self.record.as_meteo().is_some() {
-            Box::new(
-                self.meteo()
-                    .map(|(_, observables)| {
-                        observables.keys()
-                        //.copied()
                     })
                     .fold(vec![], |mut list, items| {
                         // create a unique list
@@ -899,7 +876,7 @@ impl Rinex {
     ///     }
     /// }
     /// ```
-    pub fn meteo(&self) -> Box<dyn Iterator<Item = (&Epoch, &HashMap<Observable, f64>)> + '_> {
+    pub fn meteo(&self) -> Box<dyn Iterator<Item = (&Epoch, &MeteoObservations)> + '_> {
         Box::new(
             self.record
                 .as_meteo()
