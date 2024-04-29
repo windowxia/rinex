@@ -263,17 +263,22 @@ pub(crate) fn parse_epoch(
     };
 
     // Epoch
-    let offset = match header.version.major {
-        1 | 2 => " 21 12 21  0  0 30.0000000".len(),
+    let (epoch, rem) = match header.version.major {
+        1 | 2 => {
+            let offset = " 21 12 21  0  0 30.0000000".len();
+            let (datetime, rem) = line.split_at(offset);
+            let epoch = parse_epoch_in_timescale(datetime, ts)?;
+            (epoch, rem)
+        },
         _ => {
-            // line starts with ">"
-            line = line.split_at(1).1;
-            " 2022 01 09 00 00  0.0000000".len()
+            let line = line.split_at(1).1; // '>'
+            let offset = " 2022 01 09 00 00  0.0000000".len();
+            let (datetime, rem) = line.split_at(offset);
+            let epoch = parse_epoch_in_timescale(datetime, ts)?;
+            (epoch, rem)
         },
     };
 
-    let (date, rem) = line.split_at(offset);
-    let epoch = parse_epoch_in_timescale(date, ts)?;
     let (flag, rem) = rem.split_at(3);
     let flag = EpochFlag::from_str(flag.trim())?;
     let (n_sat, rem) = rem.split_at(3);
@@ -360,7 +365,7 @@ fn parse_observations(
             let mut systems = String::with_capacity(24 * 3); //SVNN
             systems.push_str(rem.trim()); // first line always contained
                                           // append the required amount of extra lines
-            let extra = if n_sat < 13 { 0 } else { n_sat / 12 - 1 };
+            let extra = if n_sat < 13 { 0 } else { n_sat / 13 };
             for _ in 0..extra {
                 if let Some(l) = lines.next() {
                     systems.push_str(l.trim());
@@ -448,7 +453,7 @@ fn parse_v2_observations(
 
     for line in lines {
         // browse all lines provided
-        // println!("parse_v2: \"{}\"", line); //DEBUG
+        //println!("parse_v2: \"{}\"", line); //DEBUG
         let line_width = line.len();
         if line_width < 10 {
             // line is empty: add maximal amount of vehicles possible
@@ -474,10 +479,7 @@ fn parse_v2_observations(
                         &line[start..end]
                     },
                 };
-                // println!("WORK CONTENT \"{}\"", slice); //DEBUG
-                //TODO: improve please
                 let obs = &slice[0..std::cmp::min(slice.len(), 14)]; // trimmed observations
-                                                                     //println!("OBS \"{}\"", obs); //DEBUG
                 let mut lli: Option<LliFlags> = None;
                 let mut snr: Option<SNR> = None;
                 if let Ok(value) = obs.trim().parse::<f64>() {
@@ -494,14 +496,14 @@ fn parse_v2_observations(
                             }
                         }
                     }
-                    println!(
-                        "{} {:?} ==> {}|{:?}|{:?}",
-                        sv,
-                        observables[obs_ptr - 1],
-                        value,
-                        lli,
-                        snr
-                    ); //DEBUG
+                    //println!(
+                    //    "{} {:?} ==> {}|{:?}|{:?}",
+                    //    sv,
+                    //    observables[obs_ptr - 1],
+                    //    value,
+                    //    lli,
+                    //    snr
+                    //); //DEBUG
                     observations.insert(
                         ObservationKey {
                             sv,
@@ -788,7 +790,7 @@ fn fmt_epoch_v2(header: &Header, key: &RecordKey, entry: &RecordEntry) -> Result
                 lines.push_str(&format!(" {:9.1}", clk));
             }
         }
-        if (index + 1) % 12 == 0 {
+        if (index + 1) % 13 == 0 {
             // tab
             lines.push_str("\n                                ");
         }
@@ -1608,19 +1610,12 @@ mod test {
         let mut obs_header = HeaderFields::default().with_time_of_first_obs(t0);
         for code in ["L1", "L2", "C1", "C2", "P1", "P2", "D1", "D2", "S1", "S2"] {
             let obs = Observable::from_str(code).unwrap();
-            if let Some(codes) = obs_header.codes.get_mut(&Constellation::GPS) {
-                codes.push(obs.clone());
-            } else {
-                obs_header
-                    .codes
-                    .insert(Constellation::GPS, vec![obs.clone()]);
-            }
-            if let Some(codes) = obs_header.codes.get_mut(&Constellation::Glonass) {
-                codes.push(obs.clone());
-            } else {
-                obs_header
-                    .codes
-                    .insert(Constellation::Glonass, vec![obs.clone()]);
+            for constell in [Constellation::GPS, Constellation::Glonass] {
+                if let Some(codes) = obs_header.codes.get_mut(&constell) {
+                    codes.push(obs.clone());
+                } else {
+                    obs_header.codes.insert(constell, vec![obs.clone()]);
+                }
             }
         }
         let header = Header::default()
@@ -1721,6 +1716,215 @@ mod test {
             assert_eq!(key.epoch, epoch);
             assert_eq!(key.flag, flag);
             assert!(entry.clock_offset.is_none());
+
+            let unique_sv = entry
+                .observations
+                .iter()
+                .map(|(k, _)| k.sv)
+                .unique()
+                .collect::<Vec<_>>();
+            assert_eq!(unique_sv.len(), num_sat, "bad number of SV");
+
+            let reciprocal = fmt_epoch(&header, &key, &entry);
+            assert!(
+                reciprocal.is_ok(),
+                "failed to dump back to string: {}",
+                reciprocal.err().unwrap()
+            );
+        }
+    }
+    #[test]
+    fn test_parse_v3() {
+        let t0 = Epoch::from_str("2021-12-21T00:00:00 GPST").unwrap();
+        let mut obs_header = HeaderFields::default().with_time_of_first_obs(t0);
+        for code in [
+            "C1C", "L1C", "S1C", "C2S", "L2S", "S2S", "C2W", "L2W", "S2W", "C5Q", "L5Q", "S5Q",
+        ] {
+            let obs = Observable::from_str(code).unwrap();
+            for constell in [Constellation::GPS, Constellation::Glonass] {
+                if let Some(codes) = obs_header.codes.get_mut(&constell) {
+                    codes.push(obs.clone());
+                } else {
+                    obs_header.codes.insert(constell, vec![obs.clone()]);
+                }
+            }
+        }
+        let header = Header::default()
+            .with_version(Version { major: 3, minor: 0 })
+            .with_constellation(Constellation::GPS)
+            .with_observation_fields(obs_header);
+        for (descriptor, epoch, flag, num_sat) in [
+        (
+"> 2022 01 09 00 00  0.0000000  0  9
+G01  22345079.240   117424213.48008        48.850    22345080.640    91499404.57507        46.950    22345080.580    91499412.56807        44.500    22345078.900    87686944.70808        49.550
+G03  25106377.980   131934909.06607        43.000    25106381.840   102806423.66007        42.300    25106381.060   102806435.67506        37.850    25106380.680    98522827.50406        40.650
+G08  20374390.760   107068179.92108        52.300    20374392.480    83429765.07708        52.950    20374391.620    83429761.07908        52.250    20374389.640    79953524.82009        54.350
+G10  22464836.260   118053596.15308        52.800    22464836.760    91989838.33208        48.900    22464836.820    91989850.33008        52.700    22464834.400    88156942.76908        49.900
+R01  20207718.320   108021892.15508        49.200    20207720.980    84017055.40007        43.700    20207720.080    84017060.40107        44.650
+R02  22668665.500   120964368.87508        49.350    22668667.420    94083413.28907        43.000    22668667.400    94083412.28707        43.550
+R08  21849258.020   117001804.29807        45.900    21849257.240    91001400.22507        44.650    21849257.080    91001404.23007        45.300
+R14  22065079.340   117619290.65008        51.050    22065080.780    91481666.44207        43.000    22065081.000    91481659.45507        43.300
+R15  21933521.660   117206098.42208        51.450    21933521.820    91160302.69907        44.050    21933521.860    91160306.70907        44.650",
+    Epoch::from_str("2022-01-09T00:00:00 GPST").unwrap(),
+    EpochFlag::Ok,
+    9,
+    ),
+        ] {
+            let parsed = parse_epoch(&header, descriptor, TimeScale::GPST);
+            assert!(parsed.is_ok(), "parsing error: {}", parsed.err().unwrap());
+            let (key, entry) = parsed.unwrap();
+            assert_eq!(key.epoch, epoch);
+            assert_eq!(key.flag, flag);
+            assert!(entry.clock_offset.is_none());
+
+            let unique_sv = entry
+                .observations
+                .iter()
+                .map(|(k, _)| k.sv)
+                .unique()
+                .collect::<Vec<_>>();
+            assert_eq!(unique_sv.len(), num_sat, "bad number of SV");
+        }
+    }
+    #[test]
+    fn v2_npaz_content() {
+        let t0 = Epoch::from_str("2021-12-21T00:00:00 GPST").unwrap();
+        let mut obs_header = HeaderFields::default().with_time_of_first_obs(t0);
+        for code in ["C1", "L1", "L2", "P2", "S1", "S2"] {
+            let obs = Observable::from_str(code).unwrap();
+            for constell in [Constellation::GPS, Constellation::Glonass] {
+                if let Some(codes) = obs_header.codes.get_mut(&constell) {
+                    codes.push(obs.clone());
+                } else {
+                    obs_header.codes.insert(constell, vec![obs.clone()]);
+                }
+            }
+        }
+        let header = Header::default()
+            .with_version(Version { major: 2, minor: 0 })
+            .with_constellation(Constellation::Mixed)
+            .with_observation_fields(obs_header);
+        for (descriptor, epoch, flag, num_sat) in [(
+            " 21 12 21 00 47 30.0000000  0 13G01G08G10G16G21G23G32R04R05R06R12R20
+                                R21
+  24993483.334   131341646.26201                                        33.000  
+
+  21063801.400   110691014.26607  86252749.55647  21063803.500          48.000  
+        43.000  
+  20794853.942   109277716.06007  85151471.89148  20794856.022          51.000  
+        47.000  
+  23287051.506   122374275.11906  95356574.87046  23287051.226          43.000  
+        23.000  
+  22914946.488   120418860.17306  93832876.83746  22914944.928          43.000  
+        22.000  
+  22514647.750   118315291.04406  92193736.44046  22514647.910          43.000  
+        26.000  
+  23391437.004   122922836.81105  95784029.48247  23391439.384          42.000  
+        33.000  
+  23309588.108   124821803.02605                                        41.000  
+
+  20051677.568   107187721.31007  83368233.94047  20051673.008          52.000  
+        34.000  
+  20948630.044   111785918.59403                                        37.000  
+
+  22904976.108   122354269.96206  95164435.36146  22904973.788          43.000  
+        26.000  
+  20387428.064   109020741.40904  84793909.88146  20387426.264          38.000  
+        31.000  
+  20504895.844   109725859.84707  85342322.66146  20504893.384          49.000  
+        27.000",
+            Epoch::from_str("2021-12-21T00:47:30 GPST").unwrap(),
+            EpochFlag::Ok,
+            13,
+        )] {
+            let parsed = parse_epoch(&header, descriptor, TimeScale::GPST);
+            assert!(parsed.is_ok(), "parsing error: {}", parsed.err().unwrap());
+            let (key, entry) = parsed.unwrap();
+            assert_eq!(key.epoch, epoch);
+            assert_eq!(key.flag, flag);
+
+            let unique_sv = entry
+                .observations
+                .iter()
+                .map(|(k, _)| k.sv)
+                .unique()
+                .collect::<Vec<_>>();
+            assert_eq!(unique_sv.len(), num_sat, "bad number of SV");
+        }
+    }
+    #[test]
+    fn v2_aopr_content() {
+        let t0 = Epoch::from_str("2017-01-01T00:00:00 GPST").unwrap();
+        let mut obs_header = HeaderFields::default().with_time_of_first_obs(t0);
+        for code in ["L1", "L2", "C1", "P1", "P2"] {
+            let obs = Observable::from_str(code).unwrap();
+            for constell in [Constellation::GPS] {
+                if let Some(codes) = obs_header.codes.get_mut(&constell) {
+                    codes.push(obs.clone());
+                } else {
+                    obs_header.codes.insert(constell, vec![obs.clone()]);
+                }
+            }
+        }
+        let header = Header::default()
+            .with_version(Version { major: 2, minor: 0 })
+            .with_constellation(Constellation::GPS)
+            .with_observation_fields(obs_header);
+        for (descriptor, epoch, flag, num_sat) in [
+            (
+                " 17  1  1  0  0  0.0000000  0 10G31G27G 3G32G16G 8G14G23G22G26
+ -14746974.73049 -11440396.20948  22513484.6374   22513484.7724   22513487.3704
+ -19651355.72649 -15259372.67949  21319698.6624   21319698.7504   21319703.7964
+  -9440000.26548  -7293824.59347  23189944.5874   23189944.9994   23189951.4644
+ -11141744.16748  -8631423.58147  23553953.9014   23553953.6364   23553960.7164
+ -21846711.60849 -16970657.69649  20528865.5524   20528865.0214   20528868.5944
+  -2919082.75648  -2211037.84947  24165234.9594   24165234.7844   24165241.6424
+ -20247177.70149 -15753542.44648  21289883.9064   21289883.7434   21289887.2614
+ -15110614.77049 -11762797.21948  23262395.0794   23262394.3684   23262395.3424
+ -16331314.56648 -12447068.51348  22920988.2144   22920987.5494   22920990.0634
+ -15834397.66049 -12290568.98049  21540206.1654   21540206.1564   21540211.9414",
+                Epoch::from_str("2017-01-01T00:00:00 GPST").unwrap(),
+                EpochFlag::Ok,
+                10,
+            ),
+            (
+                " 17  1  1  3 33 40.0000000  0  9G30G27G11G16G 8G 7G23G 9G 1
+  -4980733.18548  -3805623.87347  24352349.1684   24352347.9244   24352356.1564
+  -9710828.79748  -7513506.68548  23211317.1574   23211317.5034   23211324.2834
+ -26591640.60049 -20663619.71349  20668830.8234   20668830.4204   20668833.2334
+  -2876691.02148  -2188825.98947  24138743.7034   24138743.6094   24138745.3184
+ -19659629.49649 -15255613.81549  20979609.7704   20979609.4094   20979615.2514
+ -18951526.07649 -14757441.84348  21470398.1684   21470398.1574   21470400.8554
+ -18143490.68049 -14126079.68448  22685259.0754   22685258.3664   22685261.2134
+ -16594887.53049 -12883140.10148  22336785.6934   22336785.4334   22336790.8924
+ -19095445.86249 -14826971.50648  21708306.6584   21708306.5704   21708312.9414",
+                Epoch::from_str("2017-01-01T03:33:40 GPST").unwrap(),
+                EpochFlag::Ok,
+                9,
+            ),
+            (
+                " 17  1  1  6  9 10.0000000  0 11G30G17G 3G11G19G 8G 7G 6G22G28G 1
+ -23668184.66249 -18367274.15149  20796245.2334   20796244.8234   20796250.6334
+  -5877878.73348  -4575160.53248  23410058.5724   23410059.2714   23410062.1064
+ -14330784.79049 -11159200.76948  22386555.0924   22386555.5294   22386561.1694
+ -18535782.38249 -14386326.63548  22201809.2434   22201808.6284   22201811.8674
+  -2818370.49848  -2158733.26747  24199387.4244   24199386.1504   24199389.5674
+  -1657187.18348  -1227738.78347  24405361.4394   24405361.8174   24405367.9104
+ -20423274.04149 -15904260.09048  21190335.4504   21190335.3064   21190338.4104
+  -3369328.09448  -2572763.92047  24203321.5404   24203321.3864   24203325.7804
+ -14092358.97049 -10974147.19148  22566359.9814   22566358.6994   22566360.4184
+ -15283523.06549 -11885593.19948  22273612.1774   22273611.9344   22273614.5104
+ -21848286.72849 -16972039.81549  21184456.3894   21184456.9144   21184462.1224",
+                Epoch::from_str("2017-01-01T06:09:10 GPST").unwrap(),
+                EpochFlag::Ok,
+                11,
+            ),
+        ] {
+            let parsed = parse_epoch(&header, descriptor, TimeScale::GPST);
+            assert!(parsed.is_ok(), "parsing error: {}", parsed.err().unwrap());
+            let (key, entry) = parsed.unwrap();
+            assert_eq!(key.epoch, epoch);
+            assert_eq!(key.flag, flag);
 
             let unique_sv = entry
                 .observations

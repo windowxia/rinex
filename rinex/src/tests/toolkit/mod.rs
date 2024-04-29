@@ -144,15 +144,11 @@ pub fn test_sv_csv(dut: &Rinex, sv_csv: &str) {
         .collect::<Vec<SV>>()
         .into_iter()
         .unique()
+        .sorted()
         .collect();
 
-    let dut_sv: Vec<SV> = dut.sv().collect();
-    for v in &sv {
-        assert!(dut_sv.contains(v), "dut does not contain vehicle \"{}\"", v);
-    }
-    for v in &sv {
-        assert!(sv.contains(v), "dut should not contain vehicle \"{}\"", v);
-    }
+    let dut_sv: Vec<SV> = dut.sv().sorted().collect();
+    assert_eq!(dut_sv, sv, "bad sv content");
 }
 
 /*
@@ -193,7 +189,7 @@ pub fn test_time_frame(dut: &Rinex, tf: TestTimeFrame) {
  */
 pub fn test_observables_csv(dut: &Rinex, observables_csv: &str) {
     let observ = build_observables(observables_csv);
-    let dut_observ: Vec<&Observable> = dut.observable().collect();
+    let dut_observ = dut.observable().collect::<Vec<_>>();
     for o in &observ {
         assert!(
             dut_observ.contains(&o),

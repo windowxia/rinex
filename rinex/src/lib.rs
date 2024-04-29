@@ -622,11 +622,12 @@ use crate::navigation::NavFrame;
 use itertools::Itertools; // .unique()
 
 impl Rinex {
+    /// Designs a Unique [Epoch] iterator, spanning all identified [Epoch]s
+    /// in chronological order
     pub fn epoch(&self) -> Box<dyn Iterator<Item = Epoch> + '_> {
-        //if let Some(r) = self.record.as_obs() {
-        //    Box::new(r.iter().map(|((k, _), _)| *k))
-        //} else
-        if let Some(r) = self.record.as_nav() {
+        if let Some(r) = self.record.as_obs() {
+            Box::new(r.iter().map(|(k, _)| k.epoch))
+        } else if let Some(r) = self.record.as_nav() {
             Box::new(r.iter().map(|(k, _)| *k))
         } else if let Some(r) = self.record.as_meteo() {
             Box::new(r.iter().map(|(k, _)| *k))
@@ -669,29 +670,15 @@ impl Rinex {
     ///     sv!("G32")]);
     /// ```
     pub fn sv(&self) -> Box<dyn Iterator<Item = SV> + '_> {
-        //if let Some(record) = self.record.as_obs() {
-        //    Box::new(
-        //        // grab all vehicles identified through all Epochs
-        //        // and fold them into a unique list
-        //        record
-        //            .iter()
-        //            .map(|((_, _), (_clk, entries))| {
-        //                let sv: Vec<SV> = entries.keys().cloned().collect();
-        //                sv
-        //            })
-        //            .fold(vec![], |mut list, new_items| {
-        //                for new in new_items {
-        //                    if !list.contains(&new) {
-        //                        // create a unique list
-        //                        list.push(new);
-        //                    }
-        //                }
-        //                list
-        //            })
-        //            .into_iter(),
-        //    )
-        //} else
-        if let Some(record) = self.record.as_nav() {
+        if let Some(record) = self.record.as_obs() {
+            Box::new(
+                // Design Unique SV iterator
+                record
+                    .iter()
+                    .flat_map(|(_, v)| v.observations.iter().map(|(k, _)| k.sv))
+                    .unique(),
+            )
+        } else if let Some(record) = self.record.as_nav() {
             Box::new(
                 // grab all vehicles through all epochs,
                 // fold them into a unique list
@@ -732,10 +719,7 @@ impl Rinex {
                     .unique(),
             )
         } else {
-            panic!(
-                ".sv() is not feasible on \"{:?}\" RINEX",
-                self.header.rinex_type
-            );
+            panic!("not feasible on \"{:?}\" RINEX", self.header.rinex_type);
         }
     }
 
@@ -807,10 +791,7 @@ impl Rinex {
                 }),
             )
         } else {
-            panic!(
-                ".sv_epoch() is not feasible on \"{:?}\" RINEX",
-                self.header.rinex_type
-            );
+            panic!("not feasible on \"{:?}\" RINEX", self.header.rinex_type);
         }
     }
     /// Returns a (unique) Iterator over all identified [`Constellation`]s.
@@ -848,29 +829,25 @@ impl Rinex {
             )
         }))
     }
-    /// Returns a (unique) Iterator over all identified [`Observable`]s.
-    /// This will panic if invoked on other than OBS and Meteo RINEX.
+    /// Returns a Unique Iterator over all identified [`Observable`]s.
+    /// This only applies to Observation, Meteo and DORIS RINEX and will panic otherwise.
     pub fn observable(&self) -> Box<dyn Iterator<Item = &Observable> + '_> {
-        //if self.record.as_obs().is_some() {
-        //    Box::new(
-        //        self.observation()
-        //            .map(|(_, (_, svnn))| {
-        //                svnn.iter()
-        //                    .flat_map(|(_sv, observables)| observables.keys())
-        //            })
-        //            .fold(vec![], |mut list, items| {
-        //                // create a unique list
-        //                for item in items {
-        //                    if !list.contains(&item) {
-        //                        list.push(item);
-        //                    }
-        //                }
-        //                list
-        //            })
-        //            .into_iter(),
-        //    )
-        //} else
-        if self.record.as_doris().is_some() {
+        if let Some(rec) = self.record.as_obs() {
+            Box::new(
+                rec.iter()
+                    .map(|(_, v)| v.observations.keys().map(|k| &k.observable))
+                    .fold(vec![], |mut list, items| {
+                        // create a unique list
+                        for item in items {
+                            if !list.contains(&item) {
+                                list.push(item);
+                            }
+                        }
+                        list
+                    })
+                    .into_iter(),
+            )
+        } else if self.record.as_doris().is_some() {
             Box::new(
                 self.doris()
                     .map(|(_, stations)| {
@@ -908,10 +885,7 @@ impl Rinex {
                     .into_iter(),
             )
         } else {
-            panic!(
-                ".observable() is not feasible on \"{:?}\" RINEX",
-                self.header.rinex_type
-            );
+            panic!("not feasible on \"{:?}\" RINEX", self.header.rinex_type);
         }
     }
     /// Meteo RINEX record browsing method. Extracts data for this specific format.
