@@ -1,11 +1,15 @@
 /* Features that only get activated on "qc" option */
 use crate::prelude::Rinex;
 use rinex_qc_traits::{MaskFilter, Masking};
+use hifitime::TimeSeries;
 
-use crate::epoch::epoch_decompose;
+use crate::{
+    epoch::epoch_decompose,
+    prelude::{Constellation, RinexType, Duration, Epoch},
+};
 
 // RINEX production infrastructure // physical observations
-mod production;
+pub(crate) mod production;
 pub use production::{DataSource, DetailedProductionAttributes, ProductionAttributes, FFU, PPU};
 
 #[cfg_attr(docrs, doc(cfg(feature = "qc")))]

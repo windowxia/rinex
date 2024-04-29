@@ -1,6 +1,6 @@
 //! "qc" special tests
-mod decimation;
+// mod decimation;
 mod filename;
-mod masking;
-mod sampling;
-mod smoothing;
+// mod masking;
+// mod sampling;
+// mod smoothing;

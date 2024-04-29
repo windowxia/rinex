@@ -31,9 +31,6 @@ mod leap; // leap second
 mod linspace; // grid and linear spacing
 mod observable;
 
-#[cfg(feature = "qc")]
-mod qc;
-
 #[cfg(test)]
 mod tests;
 
