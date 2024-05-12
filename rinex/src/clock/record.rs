@@ -1,25 +1,42 @@
 use std::str::FromStr;
 use thiserror::Error;
 
-use std::collections::BTreeMap;
+#[cfg(feature = "serde")]
+use serde::Serialize;
+
+use std::collections::{
+    btree_map::{Iter, IterMut},
+    BTreeMap,
+};
 use strum_macros::EnumString;
 
-use crate::{epoch, merge, merge::Merge, prelude::*, split, split::Split, version::Version};
+use crate::{
+    epoch,
+    merge::{Error as MergeError, Merge},
+    prelude::{Duration, Epoch, Version, SV},
+    split::{Error as SplitError, Split},
+};
 
-use gnss::prelude::SV;
-use hifitime::Duration;
+/// Clock RINEX Record content.
+#[cfg_attr(feature = "serde", derive(Serialize))]
+pub struct Record {
+    pub(crate) inner: BTreeMap<RecordKey, ClockProfile>,
+}
 
-/// [`ClockKey`] describes each [`ClockProfile`] at a specific [Epoch].
+/// [`RecordKey`] is how we index Clock RINEX [`Record`]
 #[derive(Error, PartialEq, Eq, Hash, Clone, Debug, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct ClockKey {
-    /// Type of Clock
+pub struct RecordKey {
+    /// [Epoch] of this estimate, expressed in UTC in correct RINEX.
+    pub epoch: Epoch,
+    /// [ClockType] describes the type of clock
     pub clock_type: ClockType,
-    /// Type of attached measurement
+    /// [ClockProfileType] describes the [ClockProfile], ie.,
+    /// the type of measurement
     pub profile_type: ClockProfileType,
 }
 
-impl std::fmt::Display for ClockKey {
+impl std::fmt::Display for RecordKey {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "clock-type: {}", self.clock_type)?;
         write!(f, "profile-type: {}", self.profile_type)
@@ -135,9 +152,6 @@ impl std::fmt::Display for ClockProfileType {
         }
     }
 }
-
-/// Clock RINEX record content.
-pub type Record = BTreeMap<Epoch, BTreeMap<ClockKey, ClockProfile>>;
 
 pub(crate) fn is_new_epoch(line: &str) -> bool {
     // first 2 bytes match a ClockProfileType code

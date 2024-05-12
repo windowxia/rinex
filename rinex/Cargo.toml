@@ -33,7 +33,7 @@ ionex = []
 
 # Unlock CLOCK RINEX full support.
 # Unlocks dedicated browsing methods and dedicated analysis.
-clock = []
+# clock = []
 
 # Unlock ANTEX full support.
 # Unlocks dedicated browsing methods and antenna compensation methods.
@@ -54,12 +54,12 @@ sp3 = ["dep:sp3", "walkdir"]
 # Unlock all features, all at once
 full = [
     "antex",
-    "clock",
+    # "clock",
     "doris",
     "flate2",
     "horrorshow",
     "ionex",
-    "meteo",
+    # "meteo",
     "nav",
     "obs",
     "qc",

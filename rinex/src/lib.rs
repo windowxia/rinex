@@ -2241,16 +2241,15 @@ impl Rinex {
         }))
     }
     /// Returns true if rain was detected during this time frame.
+    /// Standard RINEX files span 24 hours.
     /// ```
     /// use std::str::FromStr;
     /// use rinex::{filter, Rinex};
     /// use rinex::preprocessing::*; // .filter()
     /// let rinex = Rinex::from_file("../test_resources/MET/V2/abvi0010.15m")
     ///     .unwrap();
-    /// // cropping time frame requires the "processing" feature
-    /// let rinex = rinex
-    ///                 .filter(filter!(">= 2015-01-01T19:00:00 UTC"))
-    ///                 .filter(filter!(" < 2015-01-01T20:00:00 UTC"));
+    /// // This library offers several options to modify the time frame.
+    /// // This simply means it did not rain on that day.
     /// assert_eq!(rinex.rain_detected(), false);
     /// ```
     pub fn rain_detected(&self) -> bool {
@@ -2264,14 +2263,12 @@ impl Rinex {
     /// Returns total accumulated rain in tenth of mm, within this time frame
     /// ```
     /// use std::str::FromStr;
-    /// use rinex::{filter, Rinex};
-    /// use rinex::preprocessing::*; // .filter()
+    /// use rinex::prelude::Rinex;
     /// let rinex = Rinex::from_file("../test_resources/MET/V2/abvi0010.15m")
     ///     .unwrap();
-    /// // cropping time frame requires the "processing" feature
-    /// let rinex = rinex
-    ///                 .filter(filter!(">= 2015-01-01T19:00:00 UTC"))
-    ///                 .filter(filter!(" < 2015-01-01T19:30:00 UTC"));
+    /// // RINEX files span 24h by default.
+    /// // This library offers several options to modify the time frame.
+    /// // By default, this simply means it did not rain on that day
     /// assert_eq!(rinex.accumulated_rain(), 0.0);
     /// assert_eq!(rinex.rain_detected(), false);
     /// ```
@@ -2294,25 +2291,20 @@ impl Rinex {
     /// use rinex::preprocessing::*; // .filter()
     /// let mut rinex = Rinex::from_file("../test_resources/MET/V2/abvi0010.15m")
     ///     .unwrap();
-    /// // cropping time frame requires the "processing" feature
-    /// let rinex = rinex
-    ///                 .filter(filter!(">= 2015-01-01T19:00:00 UTC"))
-    ///                 .filter(filter!(" < 2015-01-01T20:00:00 UTC"));
+    /// // By default RINEX files span 24 hours.
+    /// // This library offers several options to crop the time frame.
+    /// // By default, this simply means hail was not during that day
     /// assert_eq!(rinex.hail_detected(), false);
     /// ```
     pub fn hail_detected(&self) -> bool {
-        if let Some(r) = self.record.as_meteo() {
-            for observables in r.values() {
-                for (observ, value) in observables {
-                    if *observ == Observable::HailIndicator && *value > 0.0 {
-                        return true;
-                    }
+        for (_, observations) in self.meteo() {
+            for (observable, value) in observations {
+                if *observable == Observable::HailIndicator && *value > 0.0 {
+                    return true;
                 }
             }
-            false
-        } else {
-            false
         }
+        false
     }
 }
 
