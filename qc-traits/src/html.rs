@@ -1,6 +1,7 @@
-//! RINEX QC reports in HTML
+//! QC reports in HTML
 use horrorshow::RenderBox;
 
+/// Render self as HTML
 pub trait HtmlReport {
     /// Renders self to plain HTML.
     /// Generates a whole HTML entity.

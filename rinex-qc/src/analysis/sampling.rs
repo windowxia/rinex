@@ -1,5 +1,5 @@
 use hifitime::Unit;
-use horrorshow::box_html;
+use qc_traits::html_prelude::{box_html, doctype, html, HtmlReport, RenderBox};
 use rinex::prelude::{Duration, Epoch, EpochFlag, Rinex};
 
 use crate::QcOpts;
@@ -36,9 +36,6 @@ impl QcSamplingAnalysis {
         }
     }
 }
-
-use horrorshow::RenderBox;
-use rinex_qc_traits::HtmlReport;
 
 impl HtmlReport for QcSamplingAnalysis {
     fn to_html(&self) -> String {

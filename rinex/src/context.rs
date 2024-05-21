@@ -15,10 +15,7 @@ use crate::{
 use sp3::{prelude::SP3, Merge as SP3Merge, MergeError as SP3MergeError};
 
 #[cfg(feature = "qc")]
-use horrorshow::{box_html, helper::doctype, html, RenderBox};
-
-#[cfg(feature = "qc")]
-use rinex_qc_traits::HtmlReport;
+use qc_traits::html_prelude::*;
 
 #[derive(Debug, Error)]
 pub enum Error {

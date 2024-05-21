@@ -1,8 +1,12 @@
 //! RINEX Quality analysis library
+
+extern crate gnss_rs as gnss;
+extern crate rinex_qc_traits as qc_traits;
+
 //use strum_macros::EnumString;
-use horrorshow::helper::doctype;
-use horrorshow::html; // RenderBox};
-use rinex_qc_traits::HtmlReport;
+use qc_traits::html_prelude::{doctype, html, HtmlReport};
+
+mod report;
 
 mod opts;
 pub use opts::{QcClassification, QcOpts};

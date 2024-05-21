@@ -5,6 +5,9 @@
 
 extern crate gnss_rs as gnss;
 
+#[cfg(feature = "qc")]
+extern crate rinex_qc_traits as qc_traits;
+
 pub mod antex;
 pub mod carrier;
 pub mod clock;

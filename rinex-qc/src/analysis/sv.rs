@@ -1,8 +1,6 @@
 use super::QcOpts;
+use qc_traits::html_prelude::{box_html, HtmlReport, RenderBox};
 use rinex::prelude::{Rinex, SV};
-
-use horrorshow::{box_html, RenderBox};
-use rinex_qc_traits::HtmlReport;
 
 #[derive(Debug, Clone)]
 pub struct QcSvAnalysis {

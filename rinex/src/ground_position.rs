@@ -3,6 +3,9 @@ use map_3d::{deg2rad, ecef2geodetic, geodetic2ecef, rad2deg, Ellipsoid};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "qc")]
+use qc_traits::html_prelude::*;
+
 #[derive(Default, Copy, Debug, Clone, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct GroundPosition(f64, f64, f64);
@@ -60,12 +63,6 @@ impl std::fmt::UpperHex for GroundPosition {
         write!(f, "{:14.4}{:14.4}{:14.4}", self.0, self.1, self.2)
     }
 }
-
-#[cfg(feature = "qc")]
-use rinex_qc_traits::HtmlReport;
-
-#[cfg(feature = "qc")]
-use horrorshow::RenderBox;
 
 #[cfg(feature = "qc")]
 impl HtmlReport for GroundPosition {

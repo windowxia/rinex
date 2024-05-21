@@ -5,6 +5,9 @@ use std::str::FromStr;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "qc")]
+use qc_traits::html_prelude::*;
+
 /// GNSS receiver description
 #[derive(Default, Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -90,12 +93,6 @@ impl Antenna {
         s
     }
 }
-
-#[cfg(feature = "qc")]
-use horrorshow::RenderBox;
-
-#[cfg(feature = "qc")]
-use rinex_qc_traits::HtmlReport;
 
 #[cfg(feature = "qc")]
 impl HtmlReport for Antenna {

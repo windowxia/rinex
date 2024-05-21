@@ -1,9 +1,6 @@
-use horrorshow::{box_html, RenderBox};
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::str::FromStr;
-
-extern crate gnss_rs as gnss;
 
 use gnss::prelude::SV;
 
@@ -14,7 +11,7 @@ use rinex::observation::SNR;
 use rinex::prelude::{Epoch, EpochFlag, Observable, Rinex};
 use rinex::preprocessing::Derivative;
 
-use rinex_qc_traits::HtmlReport;
+use qc_traits::html_prelude::{box_html, doctype, html, HtmlReport, RenderBox};
 use statrs::statistics::Statistics;
 
 /*
